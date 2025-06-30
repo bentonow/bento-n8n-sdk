@@ -109,6 +109,45 @@ export class Bento implements INodeType {
 				description: 'The last name of the subscriber for personalization',
 			},
 			{
+				displayName: 'Custom Fields',
+				name: 'customFields',
+				type: 'fixedCollection',
+				typeOptions: {
+					multipleValues: true,
+				},
+				displayOptions: {
+					show: {
+						operation: ['createSubscriber', 'updateSubscriber'],
+					},
+				},
+				default: {},
+				options: [
+					{
+						name: 'field',
+						displayName: 'Field',
+						values: [
+							{
+								displayName: 'Key',
+								name: 'key',
+								type: 'string',
+								default: '',
+								placeholder: 'company',
+								description: 'Custom field name',
+							},
+							{
+								displayName: 'Value',
+								name: 'value',
+								type: 'string',
+								default: '',
+								placeholder: 'Acme Corp',
+								description: 'Custom field value',
+							},
+						],
+					},
+				],
+				description: 'Additional custom fields to store with the subscriber',
+			},
+			{
 				displayName: 'User ID',
 				name: 'userId',
 				type: 'string',
@@ -298,23 +337,57 @@ export class Bento implements INodeType {
 						const email = this.getNodeParameter('email', i) as string;
 						const firstName = this.getNodeParameter('firstName', i) as string;
 						const lastName = this.getNodeParameter('lastName', i) as string;
+						const customFields = this.getNodeParameter('customFields', i) as any;
 
-						// Use the HTTP helper to make the API call
+						// Validate required inputs
+						if (!email) {
+							throw new NodeOperationError(this.getNode(), 'Email is required for creating a subscriber', {
+								itemIndex: i,
+							});
+						}
+
+						// Validate email format
+						const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+						if (!emailRegex.test(email)) {
+							throw new NodeOperationError(this.getNode(), 'Invalid email format', {
+								itemIndex: i,
+							});
+						}
+
+						// Build details object with custom fields
+						const details: { [key: string]: string } = {
+							first_name: firstName || '',
+							last_name: lastName || '',
+						};
+
+						// Add custom fields if provided
+						if (customFields.field) {
+							for (const field of customFields.field) {
+								if (field.key && field.value) {
+									details[field.key] = field.value;
+								}
+							}
+						}
+
+						// Use Events API to create subscriber with additional metadata
+						// This allows for richer subscriber data and triggers automation
+						const requestBody = {
+							events: [
+								{
+									email: email,
+									type: '$subscribe',
+									details: details
+								}
+							]
+						};
+
 						try {
-							// Example API call using the helper (placeholder endpoint)
-							const requestBody = {
-								email,
-								first_name: firstName,
-								last_name: lastName,
-							};
-
-							// This demonstrates the HTTP helper usage
-							// In a real implementation, this would be the actual Bento API endpoint
+							// Use Events API for subscriber creation as per BEN-57 requirements
 							const response = await makeBentoRequest.call(
 								this,
 								'POST',
-								'/api/v1/batch/subscribers',
-								{ subscribers: [requestBody] },
+								'/api/v1/batch/events',
+								requestBody,
 								i
 							);
 
@@ -327,10 +400,10 @@ export class Bento implements INodeType {
 									lastName,
 								},
 								apiResponse: response,
-								message: 'Subscriber created successfully using HTTP helper',
+								message: 'Subscriber created successfully using Events API',
 							};
 						} catch (error) {
-							// If the API call fails, return a placeholder response showing the helper works
+							// If the API call fails, return error details
 							responseData = {
 								operation: 'createSubscriber',
 								success: false,
@@ -340,7 +413,7 @@ export class Bento implements INodeType {
 									lastName,
 								},
 								error: error.message,
-								message: 'HTTP helper implemented and working - API call attempted but endpoint may not exist in demo',
+								message: 'Failed to create subscriber - check credentials and email format',
 							};
 						}
 						break;
@@ -359,14 +432,79 @@ export class Bento implements INodeType {
 						const email = this.getNodeParameter('email', i) as string;
 						const firstName = this.getNodeParameter('firstName', i) as string;
 						const lastName = this.getNodeParameter('lastName', i) as string;
+						const customFields = this.getNodeParameter('customFields', i) as any;
 
-						responseData = {
-							operation: 'updateSubscriber',
-							email,
-							firstName,
-							lastName,
-							message: 'Update subscriber placeholder - implement API call',
+						// Validate required inputs
+						if (!email) {
+							throw new NodeOperationError(this.getNode(), 'Email is required for updating a subscriber', {
+								itemIndex: i,
+							});
+						}
+
+						// Validate email format
+						const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+						if (!emailRegex.test(email)) {
+							throw new NodeOperationError(this.getNode(), 'Invalid email format', {
+								itemIndex: i,
+							});
+						}
+
+						// Build subscriber object with custom fields
+						const subscriberData: { [key: string]: string } = {
+							email: email,
+							first_name: firstName || '',
+							last_name: lastName || '',
 						};
+
+						// Add custom fields if provided
+						if (customFields.field) {
+							for (const field of customFields.field) {
+								if (field.key && field.value) {
+									subscriberData[field.key] = field.value;
+								}
+							}
+						}
+
+						// Use Import Subscribers API for updates as per BEN-57 requirements
+						const requestBody = {
+							subscribers: [subscriberData]
+						};
+
+						try {
+							// Use Import Subscribers API for subscriber updates
+							const response = await makeBentoRequest.call(
+								this,
+								'POST',
+								'/api/v1/batch/subscribers',
+								requestBody,
+								i
+							);
+
+							responseData = {
+								operation: 'updateSubscriber',
+								success: true,
+								subscriber: {
+									email,
+									firstName,
+									lastName,
+								},
+								apiResponse: response,
+								message: 'Subscriber updated successfully using Import Subscribers API',
+							};
+						} catch (error) {
+							// If the API call fails, return error details
+							responseData = {
+								operation: 'updateSubscriber',
+								success: false,
+								subscriber: {
+									email,
+									firstName,
+									lastName,
+								},
+								error: error.message,
+								message: 'Failed to update subscriber - check credentials and email format',
+							};
+						}
 						break;
 					}
 					case 'trackEvent': {
