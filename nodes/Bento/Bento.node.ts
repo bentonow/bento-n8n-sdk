@@ -109,6 +109,20 @@ export class Bento implements INodeType {
 				description: 'The last name of the subscriber for personalization',
 			},
 			{
+				displayName: 'User ID',
+				name: 'userId',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						operation: ['trackEvent'],
+					},
+				},
+				default: '',
+				placeholder: 'user123@example.com',
+				description: 'The unique identifier for the user (typically email address)',
+			},
+			{
 				displayName: 'Event Name',
 				name: 'eventName',
 				type: 'string',
@@ -356,22 +370,73 @@ export class Bento implements INodeType {
 						break;
 					}
 					case 'trackEvent': {
+						const userId = this.getNodeParameter('userId', i) as string;
 						const eventName = this.getNodeParameter('eventName', i) as string;
 						const eventProperties = this.getNodeParameter('eventProperties', i) as any;
 
+						// Validate required inputs
+						if (!userId || !eventName) {
+							throw new NodeOperationError(this.getNode(), 'User ID and event name are required for tracking events', {
+								itemIndex: i,
+							});
+						}
+
+						// Build event properties object
 						const properties: { [key: string]: string } = {};
 						if (eventProperties.property) {
 							for (const prop of eventProperties.property) {
-								properties[prop.key] = prop.value;
+								if (prop.key && prop.value) {
+									properties[prop.key] = prop.value;
+								}
 							}
 						}
 
-						responseData = {
-							operation: 'trackEvent',
-							eventName,
-							properties,
-							message: 'Track event placeholder - implement API call',
+						// Build request body - Bento Events API expects an array of events
+						const requestBody = {
+							events: [
+								{
+									email: userId,
+									type: eventName,
+									details: properties,
+								}
+							]
 						};
+
+						try {
+							// Use the HTTP helper to track the event
+							const response = await makeBentoRequest.call(
+								this,
+								'POST',
+								'/api/v1/batch/events',
+								requestBody,
+								i
+							);
+
+							responseData = {
+								operation: 'trackEvent',
+								success: true,
+								event: {
+									userId,
+									eventName,
+									properties,
+								},
+								apiResponse: response,
+								message: 'Event tracked successfully',
+							};
+						} catch (error) {
+							// If the API call fails, return error details
+							responseData = {
+								operation: 'trackEvent',
+								success: false,
+								event: {
+									userId,
+									eventName,
+									properties,
+								},
+								error: error.message,
+								message: 'Failed to track event - check credentials and event data',
+							};
+						}
 						break;
 					}
 					case 'sendTransactionalEmail': {
