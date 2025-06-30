@@ -48,16 +48,22 @@ export class Bento implements INodeType {
 						action: 'Get a subscriber',
 					},
 					{
-						name: 'Update Subscriber',
-						value: 'updateSubscriber',
-						description: 'Modify subscriber profile information and custom attributes',
-						action: 'Update a subscriber',
+						name: 'Send Transactional Email',
+						value: 'sendTransactionalEmail',
+						description: 'Send personalized transactional emails using Bento templates',
+						action: 'Send a transactional email',
 					},
 					{
 						name: 'Track Event',
 						value: 'trackEvent',
 						description: 'Record custom events and behaviors for subscriber segmentation and automation',
 						action: 'Track an event',
+					},
+					{
+						name: 'Update Subscriber',
+						value: 'updateSubscriber',
+						description: 'Modify subscriber profile information and custom attributes',
+						action: 'Update a subscriber',
 					},
 				],
 				default: 'createSubscriber',
@@ -152,6 +158,113 @@ export class Bento implements INodeType {
 					},
 				],
 				description: 'Additional properties and data to attach to the event for segmentation and personalization',
+			},
+			// Send Transactional Email parameters
+			{
+				displayName: 'Recipient Email',
+				name: 'recipientEmail',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						operation: ['sendTransactionalEmail'],
+					},
+				},
+				default: '',
+				placeholder: 'recipient@example.com',
+				description: 'The email address of the recipient',
+			},
+			{
+				displayName: 'Template ID',
+				name: 'templateId',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						operation: ['sendTransactionalEmail'],
+					},
+				},
+				default: '',
+				placeholder: 'welcome-email-template',
+				description: 'The ID or slug of the Bento email template to use',
+			},
+			{
+				displayName: 'Subject',
+				name: 'subject',
+				type: 'string',
+				displayOptions: {
+					show: {
+						operation: ['sendTransactionalEmail'],
+					},
+				},
+				default: '',
+				placeholder: 'Welcome to our platform!',
+				description: 'Email subject line (optional if template has default subject)',
+			},
+			{
+				displayName: 'From Name',
+				name: 'fromName',
+				type: 'string',
+				displayOptions: {
+					show: {
+						operation: ['sendTransactionalEmail'],
+					},
+				},
+				default: '',
+				placeholder: 'Your Company',
+				description: 'The sender name (optional if template has default)',
+			},
+			{
+				displayName: 'From Email',
+				name: 'fromEmail',
+				type: 'string',
+				displayOptions: {
+					show: {
+						operation: ['sendTransactionalEmail'],
+					},
+				},
+				default: '',
+				placeholder: 'noreply@yourcompany.com',
+				description: 'The sender email address (optional if template has default)',
+			},
+			{
+				displayName: 'Dynamic Data',
+				name: 'dynamicData',
+				type: 'fixedCollection',
+				typeOptions: {
+					multipleValues: true,
+				},
+				displayOptions: {
+					show: {
+						operation: ['sendTransactionalEmail'],
+					},
+				},
+				default: {},
+				options: [
+					{
+						name: 'data',
+						displayName: 'Data',
+						values: [
+							{
+								displayName: 'Key',
+								name: 'key',
+								type: 'string',
+								default: '',
+								placeholder: 'first_name',
+								description: 'Template variable name',
+							},
+							{
+								displayName: 'Value',
+								name: 'value',
+								type: 'string',
+								default: '',
+								placeholder: 'John',
+								description: 'Value to substitute in template',
+							},
+						],
+					},
+				],
+				description: 'Dynamic data to personalize the email template (e.g., first_name, order_total)',
 			},
 		],
 	};
@@ -259,6 +372,90 @@ export class Bento implements INodeType {
 							properties,
 							message: 'Track event placeholder - implement API call',
 						};
+						break;
+					}
+					case 'sendTransactionalEmail': {
+						const recipientEmail = this.getNodeParameter('recipientEmail', i) as string;
+						const templateId = this.getNodeParameter('templateId', i) as string;
+						const subject = this.getNodeParameter('subject', i) as string;
+						const fromName = this.getNodeParameter('fromName', i) as string;
+						const fromEmail = this.getNodeParameter('fromEmail', i) as string;
+						const dynamicData = this.getNodeParameter('dynamicData', i) as any;
+
+						// Validate required inputs
+						if (!recipientEmail || !templateId) {
+							throw new NodeOperationError(this.getNode(), 'Recipient email and template ID are required for sending transactional emails', {
+								itemIndex: i,
+							});
+						}
+
+						// Validate email format
+						const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+						if (!emailRegex.test(recipientEmail)) {
+							throw new NodeOperationError(this.getNode(), 'Invalid recipient email format', {
+								itemIndex: i,
+							});
+						}
+
+						// Build dynamic data object
+						const templateData: { [key: string]: string } = {};
+						if (dynamicData.data) {
+							for (const item of dynamicData.data) {
+								if (item.key && item.value) {
+									templateData[item.key] = item.value;
+								}
+							}
+						}
+
+						// Build request body
+						const requestBody: any = {
+							to: recipientEmail,
+							template: templateId,
+							personalizations: templateData,
+						};
+
+						// Add optional fields if provided
+						if (subject) requestBody.subject = subject;
+						if (fromName) requestBody.from_name = fromName;
+						if (fromEmail) requestBody.from_email = fromEmail;
+
+						try {
+							// Use the HTTP helper to send the transactional email
+							const response = await makeBentoRequest.call(
+								this,
+								'POST',
+								'/api/v1/emails/send',
+								requestBody,
+								i
+							);
+
+							responseData = {
+								operation: 'sendTransactionalEmail',
+								success: true,
+								email: {
+									recipient: recipientEmail,
+									template: templateId,
+									subject,
+									personalizations: templateData,
+								},
+								apiResponse: response,
+								message: 'Transactional email sent successfully',
+							};
+						} catch (error) {
+							// If the API call fails, return error details
+							responseData = {
+								operation: 'sendTransactionalEmail',
+								success: false,
+								email: {
+									recipient: recipientEmail,
+									template: templateId,
+									subject,
+									personalizations: templateData,
+								},
+								error: error.message,
+								message: 'Failed to send transactional email - check credentials and template ID',
+							};
+						}
 						break;
 					}
 					default:
