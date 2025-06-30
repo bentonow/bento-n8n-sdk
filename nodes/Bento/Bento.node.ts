@@ -5,6 +5,7 @@ import type {
 	INodeTypeDescription,
 } from 'n8n-workflow';
 import { NodeConnectionType, NodeOperationError } from 'n8n-workflow';
+import { Buffer } from 'buffer';
 
 export class Bento implements INodeType {
 	description: INodeTypeDescription = {
@@ -159,6 +160,26 @@ export class Bento implements INodeType {
 			try {
 				const operation = this.getNodeParameter('operation', i) as string;
 
+				// Get and validate credentials
+				const credentials = await this.getCredentials('bentoApi');
+				if (!credentials) {
+					throw new NodeOperationError(this.getNode(), 'No credentials provided', {
+						itemIndex: i,
+					});
+				}
+
+				const { publishableKey, secretKey, siteUuid } = credentials;
+				if (!publishableKey || !secretKey || !siteUuid) {
+					throw new NodeOperationError(this.getNode(), 'Missing required credentials: publishableKey, secretKey, and siteUuid are all required', {
+						itemIndex: i,
+					});
+				}
+
+				// Type cast credentials to strings for safe usage
+				const pubKey = publishableKey as string;
+				const secKey = secretKey as string;
+				const uuid = siteUuid as string;
+
 				let responseData;
 
 				switch (operation) {
@@ -167,12 +188,34 @@ export class Bento implements INodeType {
 						const firstName = this.getNodeParameter('firstName', i) as string;
 						const lastName = this.getNodeParameter('lastName', i) as string;
 
+						// Example of how to use credentials for API call
+						const authHeader = 'Basic ' + Buffer.from(`${pubKey}:${secKey}`).toString('base64');
+						const url = `https://app.bentonow.com/api/v1/fetch/subscribers?site_uuid=${uuid}`;
+						
+						// This is a placeholder - actual API call would be:
+						// const response = await this.helpers.httpRequest({
+						//   method: 'POST',
+						//   uri: url,
+						//   headers: {
+						//     Authorization: authHeader,
+						//     'Content-Type': 'application/json',
+						//   },
+						//   body: { email, firstName, lastName },
+						//   json: true,
+						// });
+
 						responseData = {
 							operation: 'createSubscriber',
 							email,
 							firstName,
 							lastName,
-							message: 'Subscriber creation placeholder - implement API call',
+							credentials: {
+								publishableKey: pubKey.substring(0, 8) + '...',
+								siteUuid: uuid,
+								authHeader: authHeader.substring(0, 20) + '...',
+							},
+							url,
+							message: 'Subscriber creation placeholder - credentials validated and ready for API call',
 						};
 						break;
 					}

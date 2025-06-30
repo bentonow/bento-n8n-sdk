@@ -13,15 +13,24 @@ export class BentoApi implements ICredentialType {
 
 	properties: INodeProperties[] = [
 		{
-			displayName: 'API Key',
-			name: 'apiKey',
+			displayName: 'Publishable Key',
+			name: 'publishableKey',
+			type: 'string',
+			typeOptions: { password: true },
+			default: '',
+			required: true,
+			description: 'Your Bento publishable key - used for client-side operations',
+		},
+		{
+			displayName: 'Secret Key',
+			name: 'secretKey',
 			type: 'string',
 			typeOptions: {
 				password: true,
 			},
 			default: '',
 			required: true,
-			description: 'Your Bento API key',
+			description: 'Your Bento secret key - used for server-side operations (keep secure)',
 		},
 		{
 			displayName: 'Site UUID',
@@ -29,32 +38,27 @@ export class BentoApi implements ICredentialType {
 			type: 'string',
 			default: '',
 			required: true,
-			description: 'Your Bento site UUID',
-		},
-		{
-			displayName: 'Base URL',
-			name: 'baseUrl',
-			type: 'string',
-			default: 'https://app.bentonow.com',
-			description: 'The base URL for Bento API (usually https://app.bentonow.com)',
+			description: 'Your Bento site UUID - identifies your specific Bento site',
 		},
 	];
 
 	authenticate: IAuthenticateGeneric = {
 		type: 'generic',
 		properties: {
-			headers: {
-				Authorization: '=Bearer {{ $credentials.apiKey }}',
+			auth: {
+				username: '={{ $credentials.publishableKey }}',
+				password: '={{ $credentials.secretKey }}',
 			},
 		},
 	};
 
 	test: ICredentialTestRequest = {
 		request: {
-			baseURL: '={{ $credentials.baseUrl }}',
-			url: '/api/v1/site',
-			headers: {
-				Authorization: '=Bearer {{ $credentials.apiKey }}',
+			baseURL: 'https://app.bentonow.com',
+			url: '=/api/v1/fetch/tags?site_uuid={{ $credentials.siteUuid }}',
+			auth: {
+				username: '={{ $credentials.publishableKey }}',
+				password: '={{ $credentials.secretKey }}',
 			},
 		},
 	};
