@@ -55,6 +55,22 @@ const SECURE_ERROR_MESSAGES = {
 	UNKNOWN_ERROR: 'An unexpected error occurred. Please contact support if the issue persists.',
 } as const;
 
+// Rate limiting and request security constants
+const REQUEST_LIMITS = {
+	MAX_PAYLOAD_SIZE: 1024 * 1024, // 1MB max payload
+	DEFAULT_TIMEOUT: 30000,        // 30 seconds
+	MAX_RETRIES: 3,                // Maximum retry attempts
+	RETRY_DELAY_BASE: 1000,        // Base delay for exponential backoff (1 second)
+	RATE_LIMIT_DELAY: 60000,       // Wait 1 minute when rate limited
+	MAX_CONCURRENT_REQUESTS: 5,    // Maximum concurrent requests per node
+} as const;
+
+// HTTP status codes that should trigger retries
+const RETRYABLE_STATUS_CODES = [429, 500, 502, 503, 504] as const;
+
+// Network error codes that should trigger retries
+const RETRYABLE_ERROR_CODES = ['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNREFUSED'] as const;
+
 
 
 /**
@@ -322,6 +338,109 @@ function logSecureError(
 		messageLength: error.message?.length || 0,
 		timestamp: new Date().toISOString(),
 	});
+}
+
+/**
+ * Validates request payload size to prevent memory issues
+ * @param body - The request body to validate
+ * @returns true if payload is within limits
+ */
+function validatePayloadSize(body: any): boolean {
+	if (!body) return true;
+	
+	const payloadSize = JSON.stringify(body).length;
+	return payloadSize <= REQUEST_LIMITS.MAX_PAYLOAD_SIZE;
+}
+
+/**
+ * Calculates exponential backoff delay for retries
+ * @param attempt - Current retry attempt (0-based)
+ * @param baseDelay - Base delay in milliseconds
+ * @returns delay in milliseconds
+ */
+function calculateBackoffDelay(attempt: number, baseDelay: number = REQUEST_LIMITS.RETRY_DELAY_BASE): number {
+	// Exponential backoff with jitter
+	const exponentialDelay = baseDelay * Math.pow(2, attempt);
+	const jitter = Math.random() * 0.1 * exponentialDelay; // Add up to 10% jitter
+	return Math.min(exponentialDelay + jitter, 30000); // Cap at 30 seconds
+}
+
+/**
+ * Determines if an error should trigger a retry
+ * @param error - The error object
+ * @param attempt - Current attempt number
+ * @returns true if the request should be retried
+ */
+function shouldRetryRequest(error: any, attempt: number): boolean {
+	// Don't retry if we've exceeded max attempts
+	if (attempt >= REQUEST_LIMITS.MAX_RETRIES) {
+		return false;
+	}
+	
+	// Retry on specific HTTP status codes
+	if (error.statusCode && RETRYABLE_STATUS_CODES.includes(error.statusCode)) {
+		return true;
+	}
+	
+	// Retry on specific network error codes
+	if (error.code && RETRYABLE_ERROR_CODES.includes(error.code)) {
+		return true;
+	}
+	
+	return false;
+}
+
+/**
+ * Sleeps for the specified duration
+ * @param ms - Milliseconds to sleep
+ */
+function sleep(ms: number): Promise<void> {
+	return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Global request tracking for rate limiting
+const activeRequests = new Map<string, number>();
+const requestQueue = new Map<string, Array<() => void>>();
+
+/**
+ * Manages concurrent request limits per node instance
+ * @param nodeId - Unique identifier for the node instance
+ * @returns Promise that resolves when request slot is available
+ */
+async function acquireRequestSlot(nodeId: string): Promise<void> {
+	const currentRequests = activeRequests.get(nodeId) || 0;
+	
+	if (currentRequests >= REQUEST_LIMITS.MAX_CONCURRENT_REQUESTS) {
+		// Wait for an existing request to complete
+		const queue = requestQueue.get(nodeId) || [];
+		return new Promise((resolve) => {
+			queue.push(resolve);
+			requestQueue.set(nodeId, queue);
+		});
+	}
+	
+	activeRequests.set(nodeId, currentRequests + 1);
+}
+
+/**
+ * Releases a request slot and processes queue
+ * @param nodeId - Unique identifier for the node instance
+ */
+function releaseRequestSlot(nodeId: string): void {
+	const currentRequests = activeRequests.get(nodeId) || 0;
+	const newCount = Math.max(0, currentRequests - 1);
+	activeRequests.set(nodeId, newCount);
+	
+	// Process queue if there are waiting requests
+	const queue = requestQueue.get(nodeId) || [];
+	if (queue.length > 0 && newCount < REQUEST_LIMITS.MAX_CONCURRENT_REQUESTS) {
+		const nextResolve = queue.shift();
+		if (nextResolve) {
+			requestQueue.set(nodeId, queue);
+			activeRequests.set(nodeId, newCount + 1);
+			nextResolve();
+		}
+	}
 }
 
 export class Bento implements INodeType {
@@ -1597,7 +1716,7 @@ export class Bento implements INodeType {
 }
 
 /**
- * Helper function to make HTTP requests to Bento API
+ * Helper function to make HTTP requests to Bento API with rate limiting and retry logic
  * Uses n8n's built-in httpRequest helper with proper authentication
  */
 async function makeBentoRequest(
@@ -1607,6 +1726,18 @@ async function makeBentoRequest(
 		body?: any,
 		itemIndex: number = 0,
 	): Promise<any> {
+		// Generate unique node ID for request tracking
+		const nodeId = `${this.getNode().id}-${this.getInstanceId()}`;
+		
+		// Validate payload size before processing
+		if (body && !validatePayloadSize(body)) {
+			throw new NodeOperationError(
+				this.getNode(),
+				`Request payload exceeds maximum size limit of ${REQUEST_LIMITS.MAX_PAYLOAD_SIZE / 1024 / 1024}MB`,
+				{ itemIndex }
+			);
+		}
+		
 		// Get and validate credentials
 		const credentials = await this.getCredentials('bentoApi');
 		if (!credentials) {
@@ -1641,7 +1772,6 @@ async function makeBentoRequest(
 		const secKey = secretKey.trim();
 		const uuid = siteUuid.trim();
 
-
 		// Create Basic auth header
 		const authHeader = 'Basic ' + Buffer.from(`${pubKey}:${secKey}`).toString('base64');
 
@@ -1658,7 +1788,6 @@ async function makeBentoRequest(
 		const encodedUuid = encodeURIComponent(uuid.trim());
 		const separator = endpoint.includes('?') ? '&' : '?';
 		const fullUrl = `${baseUrl}${endpoint}${separator}site_uuid=${encodedUuid}`;
-
 
 		// Additional validation before making the request
 		try {
@@ -1679,45 +1808,91 @@ async function makeBentoRequest(
 			);
 		}
 
+		// Acquire request slot for rate limiting
+		await acquireRequestSlot(nodeId);
+
+		let lastError: any;
+		
 		try {
-			const options: any = {
-				method,
-				url: fullUrl, // Changed from 'uri' to 'url' for n8n's httpRequest
-				headers: {
-					Authorization: authHeader,
-					'Content-Type': 'application/json',
-					Accept: 'application/json',
-				},
-				json: true,
-			};
+			// Retry logic with exponential backoff
+			for (let attempt = 0; attempt <= REQUEST_LIMITS.MAX_RETRIES; attempt++) {
+				try {
+					const options: any = {
+						method,
+						url: fullUrl,
+						headers: {
+							Authorization: authHeader,
+							'Content-Type': 'application/json',
+							Accept: 'application/json',
+							'User-Agent': 'n8n-bento-node/1.0.0',
+						},
+						json: true,
+						timeout: REQUEST_LIMITS.DEFAULT_TIMEOUT,
+					};
 
-			// Add body for POST/PUT requests
-			if (body && (method === 'POST' || method === 'PUT')) {
-				options.body = body;
+					// Add body for POST/PUT requests
+					if (body && (method === 'POST' || method === 'PUT')) {
+						options.body = body;
+					}
+
+					const response = await this.helpers.httpRequest(options);
+					
+					// Request successful, release slot and return
+					releaseRequestSlot(nodeId);
+					return response;
+
+				} catch (error: any) {
+					lastError = error;
+					
+					// Handle rate limiting specifically
+					if (error.statusCode === 429) {
+						const retryAfter = error.headers?.['retry-after'];
+						const delay = retryAfter ? parseInt(retryAfter) * 1000 : REQUEST_LIMITS.RATE_LIMIT_DELAY;
+						
+						if (attempt < REQUEST_LIMITS.MAX_RETRIES) {
+							await sleep(delay);
+							continue;
+						}
+					}
+					
+					// Check if we should retry this error
+					if (shouldRetryRequest(error, attempt)) {
+						const delay = calculateBackoffDelay(attempt);
+						await sleep(delay);
+						continue;
+					}
+					
+					// Error is not retryable or we've exceeded max attempts
+					break;
+				}
 			}
-
-			const response = await this.helpers.httpRequest(options);
-			return response;
-
-	} catch (error: any) {
-		// Log the error securely for debugging
-		logSecureError.call(this, error, 'API Request', {
-			itemIndex,
-			endpoint
-		});
-		
-		// Create a secure error message
-		const secureMessage = createSecureErrorMessage(error, 'API Request');
-		
-		// Create error with minimal information exposure
-		const nodeError = new NodeOperationError(
-			this.getNode(),
-			secureMessage,
-			{
+			
+			// All retries exhausted, throw the last error
+			throw lastError;
+			
+		} catch (error: any) {
+			// Log the error securely for debugging
+			logSecureError.call(this, error, 'API Request', {
 				itemIndex,
-				description: `Failed to communicate with Bento API. Status: ${error.statusCode || 'Unknown'}`,
-			}
-		);
-		
-		throw nodeError;
-	}	}
+				endpoint
+			});
+			
+			// Create a secure error message
+			const secureMessage = createSecureErrorMessage(error, 'API Request');
+			
+			// Create error with minimal information exposure
+			const nodeError = new NodeOperationError(
+				this.getNode(),
+				secureMessage,
+				{
+					itemIndex,
+					description: `Failed to communicate with Bento API. Status: ${error.statusCode || 'Unknown'}`,
+				}
+			);
+			
+			throw nodeError;
+		} finally {
+			// Always release the request slot
+			releaseRequestSlot(nodeId);
+		}
+	}
