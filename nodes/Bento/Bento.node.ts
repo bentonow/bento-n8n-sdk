@@ -27,6 +27,22 @@ const INPUT_LIMITS = {
 	VALIDATE_NAME: 100,   // Name for validation
 } as const;
 
+// HTML validation patterns
+const DANGEROUS_HTML_PATTERNS = [
+	/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,  // Script tags
+	/javascript:/gi,                                        // JavaScript URLs
+	/on\w+\s*=/gi,                                         // Event handlers (onclick, onload, etc.)
+	/<iframe\b[^>]*>/gi,                                   // Iframe tags
+	/<object\b[^>]*>/gi,                                   // Object tags
+	/<embed\b[^>]*>/gi,                                    // Embed tags
+	/<form\b[^>]*>/gi,                                     // Form tags
+	/<input\b[^>]*>/gi,                                    // Input tags
+	/<meta\b[^>]*>/gi,                                     // Meta tags
+	/<link\b[^>]*>/gi,                                     // Link tags (external resources)
+	/data:(?!image\/)/gi,                                  // Data URLs (except images)
+	/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi,   // Style tags
+] as const;
+
 /**
  * Helper function to validate email format with enhanced security
  * @param email - The email address to validate
@@ -105,6 +121,103 @@ function sanitizeEmail(email: string): string {
 		return '';
 	}
 	return email.trim().toLowerCase();
+}
+
+/**
+ * Validates HTML content for security issues
+ * @param html - The HTML content to validate
+ * @returns true if HTML is safe, false otherwise
+ */
+function validateHtmlContent(html: string): boolean {
+	if (typeof html !== 'string') {
+		return false;
+	}
+	
+	// Check for dangerous patterns
+	for (const pattern of DANGEROUS_HTML_PATTERNS) {
+		if (pattern.test(html)) {
+			return false;
+		}
+	}
+	
+	return true;
+}
+
+/**
+ * Sanitizes HTML content by removing dangerous elements
+ * @param html - The HTML content to sanitize
+ * @returns sanitized HTML string
+ */
+function sanitizeHtmlContent(html: string): string {
+	if (typeof html !== 'string') {
+		return '';
+	}
+	
+	let sanitized = html.trim();
+	
+	// Remove dangerous patterns
+	for (const pattern of DANGEROUS_HTML_PATTERNS) {
+		sanitized = sanitized.replace(pattern, '');
+	}
+	
+	// Remove any remaining script content that might have been obfuscated
+	sanitized = sanitized.replace(/javascript\s*:/gi, '');
+	sanitized = sanitized.replace(/vbscript\s*:/gi, '');
+	sanitized = sanitized.replace(/data\s*:/gi, '');
+	
+	return sanitized;
+}
+
+/**
+ * Validates HTML structure and provides detailed feedback
+ * @param html - The HTML content to validate
+ * @returns object with validation result and details
+ */
+function validateHtmlStructure(html: string): { isValid: boolean; issues: string[] } {
+	const issues: string[] = [];
+	
+	if (typeof html !== 'string') {
+		issues.push('HTML content must be a string');
+		return { isValid: false, issues };
+	}
+	
+	// Check for dangerous patterns and collect specific issues
+	if (/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi.test(html)) {
+		issues.push('Script tags are not allowed');
+	}
+	
+	if (/javascript:/gi.test(html)) {
+		issues.push('JavaScript URLs are not allowed');
+	}
+	
+	if (/on\w+\s*=/gi.test(html)) {
+		issues.push('Event handlers (onclick, onload, etc.) are not allowed');
+	}
+	
+	if (/<iframe\b[^>]*>/gi.test(html)) {
+		issues.push('Iframe tags are not allowed');
+	}
+	
+	if (/<form\b[^>]*>/gi.test(html)) {
+		issues.push('Form tags are not allowed in email content');
+	}
+	
+	if (/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi.test(html)) {
+		issues.push('Style tags are not recommended (use inline styles instead)');
+	}
+	
+	// Check for unclosed tags (basic validation)
+	const openTags = html.match(/<[^\/][^>]*>/g) || [];
+	const closeTags = html.match(/<\/[^>]*>/g) || [];
+	
+	if (openTags.length !== closeTags.length) {
+		issues.push('HTML may contain unclosed tags');
+	}
+	
+	return {
+		isValid: issues.length === 0,
+		issues
+	};
 }
 
 /**
@@ -1000,6 +1113,21 @@ export class Bento implements INodeType {
 						let textBody = '';
 						if (emailType === 'html') {
 							htmlBody = this.getNodeParameter('htmlBody', i) as string;
+							
+							// Validate and sanitize HTML content
+							if (htmlBody) {
+								const htmlValidation = validateHtmlStructure(htmlBody);
+								if (!htmlValidation.isValid) {
+									throw new NodeOperationError(
+										this.getNode(),
+										`HTML content validation failed: ${htmlValidation.issues.join(', ')}`,
+										{ itemIndex: i }
+									);
+								}
+								
+								// Sanitize the HTML content
+								htmlBody = sanitizeHtmlContent(htmlBody);
+							}
 						} else {
 							textBody = this.getNodeParameter('textBody', i) as string;
 						}
@@ -1047,12 +1175,36 @@ export class Bento implements INodeType {
 							});
 						}
 
+						// Additional HTML content security validation
+						if (emailType === 'html' && htmlBody) {
+							if (!validateHtmlContent(htmlBody)) {
+								throw new NodeOperationError(
+									this.getNode(),
+									'HTML content contains potentially dangerous elements and cannot be sent',
+									{ itemIndex: i }
+								);
+							}
+						}
+
 						// Build personalizations object
 						const personalizationsData: { [key: string]: string } = {};
 						if (personalizations.personalization) {
 							for (const item of personalizations.personalization) {
 								if (item.key && item.value) {
-									personalizationsData[item.key] = item.value;
+									// Validate personalization values that might contain HTML
+									if (typeof item.value === 'string' && item.value.includes('<')) {
+										if (!validateHtmlContent(item.value)) {
+											throw new NodeOperationError(
+												this.getNode(),
+												`Personalization value for "${item.key}" contains potentially dangerous HTML content`,
+												{ itemIndex: i }
+											);
+										}
+										// Sanitize HTML in personalization values
+										personalizationsData[item.key] = sanitizeHtmlContent(item.value);
+									} else {
+										personalizationsData[item.key] = item.value;
+									}
 								}
 							}
 						}
