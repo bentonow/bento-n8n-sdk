@@ -43,6 +43,20 @@ const DANGEROUS_HTML_PATTERNS = [
 	/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi,   // Style tags
 ] as const;
 
+// Secure error messages that don't leak sensitive information
+const SECURE_ERROR_MESSAGES = {
+	AUTHENTICATION_FAILED: 'Authentication failed. Please check your Bento API credentials.',
+	INVALID_REQUEST: 'Request validation failed. Please check your input parameters.',
+	API_ERROR: 'Bento API request failed. Please try again or contact support.',
+	NETWORK_ERROR: 'Network error occurred. Please check your connection and try again.',
+	VALIDATION_ERROR: 'Input validation failed. Please check your data format.',
+	RATE_LIMITED: 'Rate limit exceeded. Please wait before making more requests.',
+	SERVER_ERROR: 'Server error occurred. Please try again later.',
+	UNKNOWN_ERROR: 'An unexpected error occurred. Please contact support if the issue persists.',
+} as const;
+
+
+
 /**
  * Helper function to validate email format with enhanced security
  * @param email - The email address to validate
@@ -241,6 +255,73 @@ function validateInputLength(
 			{ itemIndex }
 		);
 	}
+}
+
+/**
+ * Creates a secure error message that doesn't leak sensitive information
+ * @param error - The original error object
+ * @param operation - The operation that failed
+ * @returns A sanitized error message
+ */
+function createSecureErrorMessage(error: any, operation: string): string {
+	// Determine the appropriate secure message based on error type
+	if (error.statusCode) {
+		switch (error.statusCode) {
+			case 400:
+				return `${SECURE_ERROR_MESSAGES.INVALID_REQUEST} (Operation: ${operation})`;
+			case 401:
+				return SECURE_ERROR_MESSAGES.AUTHENTICATION_FAILED;
+			case 403:
+				return SECURE_ERROR_MESSAGES.AUTHENTICATION_FAILED;
+			case 404:
+				return `${SECURE_ERROR_MESSAGES.API_ERROR} Resource not found.`;
+			case 429:
+				return SECURE_ERROR_MESSAGES.RATE_LIMITED;
+			case 500:
+			case 502:
+			case 503:
+			case 504:
+				return SECURE_ERROR_MESSAGES.SERVER_ERROR;
+			default:
+				return SECURE_ERROR_MESSAGES.API_ERROR;
+		}
+	}
+	
+	// Handle network and other errors
+	if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+		return SECURE_ERROR_MESSAGES.NETWORK_ERROR;
+	}
+	
+	if (error.message && error.message.includes('validation')) {
+		return SECURE_ERROR_MESSAGES.VALIDATION_ERROR;
+	}
+	
+	return SECURE_ERROR_MESSAGES.UNKNOWN_ERROR;
+}
+
+/**
+ * Logs error details securely for debugging without exposing sensitive data
+ * @param error - The error to log
+ * @param operation - The operation that failed
+ * @param context - Additional context for debugging
+ */
+function logSecureError(
+	this: IExecuteFunctions,
+	error: any,
+	operation: string,
+	context: { itemIndex: number; endpoint?: string }
+): void {
+	// Log error details for debugging (without sensitive data)
+	this.logger.error('Bento Node Error', {
+		operation,
+		itemIndex: context.itemIndex,
+		endpoint: context.endpoint,
+		statusCode: error.statusCode,
+		errorCode: error.code,
+		hasMessage: !!error.message,
+		messageLength: error.message?.length || 0,
+		timestamp: new Date().toISOString(),
+	});
 }
 
 export class Bento implements INodeType {
@@ -869,17 +950,18 @@ export class Bento implements INodeType {
 								message: 'Subscriber created successfully using Events API',
 							};
 						} catch (error) {
-							// If the API call fails, return error details
+							logSecureError.call(this, error, 'createSubscriber', { itemIndex: i });
+							
 							responseData = {
 								operation: 'createSubscriber',
 								success: false,
 								subscriber: {
-									email,
+									email: email ? '[REDACTED]' : undefined,
 									firstName,
 									lastName,
 								},
-								error: error.message,
-								message: 'Failed to create subscriber - check credentials and email format',
+								error: createSecureErrorMessage(error, 'createSubscriber'),
+								message: 'Failed to create subscriber. Please check your credentials and input data.',
 							};
 						}
 						break;
@@ -923,13 +1005,14 @@ export class Bento implements INodeType {
 								message: 'Subscriber retrieved successfully',
 							};
 						} catch (error) {
-							// If the API call fails, return error details
+							logSecureError.call(this, error, 'getSubscriber', { itemIndex: i });
+							
 							responseData = {
 								operation: 'getSubscriber',
 								success: false,
-								email,
-								error: error.message,
-								message: 'Failed to get subscriber - check credentials and email format',
+								email: email ? '[REDACTED]' : undefined,
+								error: createSecureErrorMessage(error, 'getSubscriber'),
+								message: 'Failed to retrieve subscriber. Please check your credentials and email address.',
 							};
 						}
 						break;
@@ -1004,17 +1087,18 @@ export class Bento implements INodeType {
 								message: 'Subscriber updated successfully using Import Subscribers API',
 							};
 						} catch (error) {
-							// If the API call fails, return error details
+							logSecureError.call(this, error, 'updateSubscriber', { itemIndex: i });
+							
 							responseData = {
 								operation: 'updateSubscriber',
 								success: false,
 								subscriber: {
-									email,
+									email: email ? '[REDACTED]' : undefined,
 									firstName,
 									lastName,
 								},
-								error: error.message,
-								message: 'Failed to update subscriber - check credentials and email format',
+								error: createSecureErrorMessage(error, 'updateSubscriber'),
+								message: 'Failed to update subscriber. Please check your credentials and input data.',
 							};
 						}
 						break;
@@ -1080,17 +1164,18 @@ export class Bento implements INodeType {
 								message: 'Event tracked successfully',
 							};
 						} catch (error) {
-							// If the API call fails, return error details
+							logSecureError.call(this, error, 'trackEvent', { itemIndex: i });
+							
 							responseData = {
 								operation: 'trackEvent',
 								success: false,
 								event: {
-									userId,
+									userId: userId ? '[REDACTED]' : undefined,
 									eventName,
-									properties,
+									properties: Object.keys(properties).length > 0 ? '[REDACTED]' : {},
 								},
-								error: error.message,
-								message: 'Failed to track event - check credentials and event data',
+								error: createSecureErrorMessage(error, 'trackEvent'),
+								message: 'Failed to track event. Please check your credentials and event data.',
 							};
 						}
 						break;
@@ -1255,20 +1340,20 @@ export class Bento implements INodeType {
 								message: 'Transactional email sent successfully',
 							};
 						} catch (error) {
-							// If the API call fails, return error details
+							logSecureError.call(this, error, 'sendTransactionalEmail', { itemIndex: i });
+							
 							responseData = {
 								operation: 'sendTransactionalEmail',
 								success: false,
 								email: {
-									recipient: recipientEmail,
-									from: fromEmail,
-									subject: subject,
+									recipient: recipientEmail ? '[REDACTED]' : undefined,
+									from: fromEmail ? '[REDACTED]' : undefined,
+									subject,
 									type: emailType,
-									transactional: transactional,
-									personalizations: personalizationsData,
+									transactional,
 								},
-								error: error.message,
-								message: 'Failed to send transactional email - check credentials and email content',
+								error: createSecureErrorMessage(error, 'sendTransactionalEmail'),
+								message: 'Failed to send email. Please check your credentials and email content.',
 							};
 						}
 						break;
@@ -1402,15 +1487,15 @@ export class Bento implements INodeType {
 								message: `Subscriber command '${command}' executed successfully`,
 							};
 						} catch (error) {
-							// If the API call fails, return error details
+							logSecureError.call(this, error, 'subscriberCommand', { itemIndex: i });
+							
 							responseData = {
 								operation: 'subscriberCommand',
 								success: false,
 								command: command,
-								email: email,
-								query: commandObj.query,
-								error: error.message,
-								message: `Failed to execute subscriber command '${command}' - check credentials and parameters`,
+								email: email ? '[REDACTED]' : undefined,
+								error: createSecureErrorMessage(error, 'subscriberCommand'),
+								message: `Failed to execute command '${command}'. Please check your credentials and parameters.`,
 							};
 						}
 						break;
@@ -1472,15 +1557,14 @@ export class Bento implements INodeType {
 								message: 'Email validation completed successfully',
 							};
 						} catch (error) {
-							// If the API call fails, return error details
+							logSecureError.call(this, error, 'validateEmail', { itemIndex: i });
+							
 							responseData = {
 								operation: 'validateEmail',
 								success: false,
-								email,
-								name: name || undefined,
-								ip: ip || undefined,
-								error: error.message,
-								message: 'Failed to validate email - check credentials and email format',
+								email: email ? '[REDACTED]' : undefined,
+								error: createSecureErrorMessage(error, 'validateEmail'),
+								message: 'Failed to validate email. Please check your credentials and email address.',
 							};
 						}
 						break;
@@ -1580,18 +1664,15 @@ async function makeBentoRequest(
 		try {
 			new URL(fullUrl); // This will throw if the URL is invalid
 		} catch (urlError) {
-			const detailedErrorMessage = `Invalid URL constructed: ${fullUrl}
-
-DEBUG INFORMATION:
-- URL: ${fullUrl}
-- Endpoint: ${endpoint}
-- Method: ${method}
-- Has Credentials: ${!!credentials}
-- URL Validation Error: ${urlError.message}`;
-
+			// Log the URL error securely
+			logSecureError.call(this, urlError, 'URL Validation', {
+				itemIndex,
+				endpoint
+			});
+			
 			throw new NodeOperationError(
 				this.getNode(),
-				detailedErrorMessage,
+				SECURE_ERROR_MESSAGES.INVALID_REQUEST,
 				{
 					itemIndex,
 				}
@@ -1618,55 +1699,25 @@ DEBUG INFORMATION:
 			const response = await this.helpers.httpRequest(options);
 			return response;
 
-		} catch (error: any) {
-			// Handle HTTP errors gracefully
-			let errorMessage = 'Unknown error occurred';
-			let statusCode = 'Unknown';
-
-			if (error.statusCode) {
-				statusCode = error.statusCode;
-				switch (error.statusCode) {
-					case 400:
-						errorMessage = 'Bad Request - Invalid parameters or request format';
-						break;
-					case 401:
-						errorMessage = 'Unauthorized - Invalid credentials or authentication failed';
-						break;
-					case 403:
-						errorMessage = 'Forbidden - Access denied to this resource';
-						break;
-					case 404:
-						errorMessage = 'Not Found - The requested resource does not exist';
-						break;
-					case 429:
-						errorMessage = 'Rate Limited - Too many requests, please try again later';
-						break;
-					case 500:
-						errorMessage = 'Internal Server Error - Bento API is experiencing issues';
-						break;
-					default:
-						errorMessage = error.message || `HTTP ${error.statusCode} error`;
-				}
-			} else if (error.message) {
-				errorMessage = error.message;
+	} catch (error: any) {
+		// Log the error securely for debugging
+		logSecureError.call(this, error, 'API Request', {
+			itemIndex,
+			endpoint
+		});
+		
+		// Create a secure error message
+		const secureMessage = createSecureErrorMessage(error, 'API Request');
+		
+		// Create error with minimal information exposure
+		const nodeError = new NodeOperationError(
+			this.getNode(),
+			secureMessage,
+			{
+				itemIndex,
+				description: `Failed to communicate with Bento API. Status: ${error.statusCode || 'Unknown'}`,
 			}
-
-		// Create a detailed error message with safe debug info
-		const detailedErrorMessage = `Bento API Error (${statusCode}): ${errorMessage}
-
-DEBUG INFORMATION:
-- URL: ${fullUrl}
-- Endpoint: ${endpoint}
-- Method: ${method}
-- Has Credentials: ${!!credentials}
-- Original Error: ${error.message}`;
-			throw new NodeOperationError(
-				this.getNode(),
-				detailedErrorMessage,
-				{
-					itemIndex,
-					description: error.response?.body ? JSON.stringify(error.response.body) : undefined,
-				}
-			);
-		}
-	}
+		);
+		
+		throw nodeError;
+	}	}
