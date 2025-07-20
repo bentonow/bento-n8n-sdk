@@ -10,6 +10,23 @@ import { Buffer } from 'buffer';
 // Email validation regex constant
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Input validation constants
+const INPUT_LIMITS = {
+	EMAIL: 254,           // RFC 5321 standard
+	NAME: 50,             // First/last names
+	SUBJECT: 200,         // Email subjects
+	CUSTOM_FIELD_KEY: 50, // Custom field keys
+	CUSTOM_FIELD_VALUE: 500, // Custom field values
+	EVENT_NAME: 100,      // Event names
+	EVENT_PROPERTY_KEY: 50,   // Event property keys
+	EVENT_PROPERTY_VALUE: 500, // Event property values
+	HTML_CONTENT: 50000,  // HTML email content
+	TEXT_CONTENT: 50000,  // Text email content
+	USER_ID: 254,         // User IDs (typically emails)
+	IP_ADDRESS: 45,       // IPv6 max length
+	VALIDATE_NAME: 100,   // Name for validation
+} as const;
+
 /**
  * Helper function to validate email format
  * @param email - The email address to validate
@@ -17,6 +34,29 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  */
 function isValidEmail(email: string): boolean {
 	return EMAIL_REGEX.test(email);
+}
+
+/**
+ * Validates input length and throws appropriate error
+ * @param input - The input string to validate
+ * @param maxLength - Maximum allowed length
+ * @param fieldName - Name of the field for error messages
+ * @param itemIndex - Current item index for error context
+ */
+function validateInputLength(
+	this: IExecuteFunctions,
+	input: string,
+	maxLength: number,
+	fieldName: string,
+	itemIndex: number
+): void {
+	if (typeof input === 'string' && input.length > maxLength) {
+		throw new NodeOperationError(
+			this.getNode(),
+			`${fieldName} exceeds maximum length of ${maxLength} characters (current: ${input.length})`,
+			{ itemIndex }
+		);
+	}
 }
 
 export class Bento implements INodeType {
@@ -575,6 +615,11 @@ export class Bento implements INodeType {
 						const lastName = this.getNodeParameter('lastName', i) as string;
 						const customFields = this.getNodeParameter('customFields', i) as any;
 
+						// Validate input lengths
+						validateInputLength.call(this, email, INPUT_LIMITS.EMAIL, 'Email', i);
+						validateInputLength.call(this, firstName, INPUT_LIMITS.NAME, 'First Name', i);
+						validateInputLength.call(this, lastName, INPUT_LIMITS.NAME, 'Last Name', i);
+
 						// Validate required inputs
 						if (!email) {
 							throw new NodeOperationError(this.getNode(), 'Email is required for creating a subscriber', {
@@ -599,6 +644,8 @@ export class Bento implements INodeType {
 						if (customFields.field) {
 							for (const field of customFields.field) {
 								if (field.key && field.value) {
+									validateInputLength.call(this, field.key, INPUT_LIMITS.CUSTOM_FIELD_KEY, 'Custom Field Key', i);
+									validateInputLength.call(this, field.value, INPUT_LIMITS.CUSTOM_FIELD_VALUE, 'Custom Field Value', i);
 									details[field.key] = field.value;
 								}
 							}
@@ -656,6 +703,9 @@ export class Bento implements INodeType {
 					case 'getSubscriber': {
 						const email = this.getNodeParameter('email', i) as string;
 
+						// Validate input lengths
+						validateInputLength.call(this, email, INPUT_LIMITS.EMAIL, 'Email', i);
+
 						// Validate required inputs
 						if (!email) {
 							throw new NodeOperationError(this.getNode(), 'Email is required for getting subscriber information', {
@@ -706,6 +756,11 @@ export class Bento implements INodeType {
 						const lastName = this.getNodeParameter('lastName', i) as string;
 						const customFields = this.getNodeParameter('customFields', i) as any;
 
+						// Validate input lengths
+						validateInputLength.call(this, email, INPUT_LIMITS.EMAIL, 'Email', i);
+						validateInputLength.call(this, firstName, INPUT_LIMITS.NAME, 'First Name', i);
+						validateInputLength.call(this, lastName, INPUT_LIMITS.NAME, 'Last Name', i);
+
 						// Validate required inputs
 						if (!email) {
 							throw new NodeOperationError(this.getNode(), 'Email is required for updating a subscriber', {
@@ -731,6 +786,8 @@ export class Bento implements INodeType {
 						if (customFields.field) {
 							for (const field of customFields.field) {
 								if (field.key && field.value) {
+									validateInputLength.call(this, field.key, INPUT_LIMITS.CUSTOM_FIELD_KEY, 'Custom Field Key', i);
+									validateInputLength.call(this, field.value, INPUT_LIMITS.CUSTOM_FIELD_VALUE, 'Custom Field Value', i);
 									subscriberData[field.key] = field.value;
 								}
 							}
@@ -783,6 +840,10 @@ export class Bento implements INodeType {
 						const eventName = this.getNodeParameter('eventName', i) as string;
 						const eventProperties = this.getNodeParameter('eventProperties', i) as any;
 
+						// Validate input lengths
+						validateInputLength.call(this, userId, INPUT_LIMITS.USER_ID, 'User ID', i);
+						validateInputLength.call(this, eventName, INPUT_LIMITS.EVENT_NAME, 'Event Name', i);
+
 						// Validate required inputs
 						if (!userId || !eventName) {
 							throw new NodeOperationError(this.getNode(), 'User ID and event name are required for tracking events', {
@@ -795,6 +856,8 @@ export class Bento implements INodeType {
 						if (eventProperties.property) {
 							for (const prop of eventProperties.property) {
 								if (prop.key && prop.value) {
+									validateInputLength.call(this, prop.key, INPUT_LIMITS.EVENT_PROPERTY_KEY, 'Event Property Key', i);
+									validateInputLength.call(this, prop.value, INPUT_LIMITS.EVENT_PROPERTY_VALUE, 'Event Property Value', i);
 									properties[prop.key] = prop.value;
 								}
 							}
@@ -856,6 +919,11 @@ export class Bento implements INodeType {
 						const transactional = this.getNodeParameter('transactional', i) as boolean;
 						const personalizations = this.getNodeParameter('personalizations', i) as any;
 
+						// Validate input lengths
+						validateInputLength.call(this, recipientEmail, INPUT_LIMITS.EMAIL, 'Recipient Email', i);
+						validateInputLength.call(this, fromEmail, INPUT_LIMITS.EMAIL, 'From Email', i);
+						validateInputLength.call(this, subject, INPUT_LIMITS.SUBJECT, 'Subject', i);
+
 						// Get the appropriate body based on email type
 						let htmlBody = '';
 						let textBody = '';
@@ -863,6 +931,13 @@ export class Bento implements INodeType {
 							htmlBody = this.getNodeParameter('htmlBody', i) as string;
 						} else {
 							textBody = this.getNodeParameter('textBody', i) as string;
+						}
+
+						// Validate email content length
+						if (emailType === 'html') {
+							validateInputLength.call(this, htmlBody, INPUT_LIMITS.HTML_CONTENT, 'HTML Body', i);
+						} else {
+							validateInputLength.call(this, textBody, INPUT_LIMITS.TEXT_CONTENT, 'Text Body', i);
 						}
 
 						// Validate required inputs
@@ -980,6 +1055,9 @@ export class Bento implements INodeType {
 						const email = this.getNodeParameter('commandEmail', i) as string;
 						const command = this.getNodeParameter('command', i) as string;
 
+						// Validate input lengths
+						validateInputLength.call(this, email, INPUT_LIMITS.EMAIL, 'Email', i);
+
 						// Get parameters conditionally based on command type
 						let query = '';
 						let fieldKey = '';
@@ -989,17 +1067,21 @@ export class Bento implements INodeType {
 						// Get query parameter for commands that need it
 						if (['add_tag', 'add_tag_via_event', 'remove_tag', 'remove_field'].includes(command)) {
 							query = this.getNodeParameter('query', i) as string;
+							validateInputLength.call(this, query, INPUT_LIMITS.CUSTOM_FIELD_KEY, 'Query', i);
 						}
 
 						// Get field parameters for add_field command
 						if (command === 'add_field') {
 							fieldKey = this.getNodeParameter('fieldKey', i) as string;
 							fieldValue = this.getNodeParameter('fieldValue', i) as string;
+							validateInputLength.call(this, fieldKey, INPUT_LIMITS.CUSTOM_FIELD_KEY, 'Field Key', i);
+							validateInputLength.call(this, fieldValue, INPUT_LIMITS.CUSTOM_FIELD_VALUE, 'Field Value', i);
 						}
 
 						// Get new email for change_email command
 						if (command === 'change_email') {
 							newEmail = this.getNodeParameter('newEmail', i) as string;
+							validateInputLength.call(this, newEmail, INPUT_LIMITS.EMAIL, 'New Email', i);
 						}
 
 						// Validate required inputs
@@ -1115,6 +1197,11 @@ export class Bento implements INodeType {
 						const email = this.getNodeParameter('validateEmail', i) as string;
 						const name = this.getNodeParameter('validateName', i) as string;
 						const ip = this.getNodeParameter('validateIp', i) as string;
+
+						// Validate input lengths
+						validateInputLength.call(this, email, INPUT_LIMITS.EMAIL, 'Email', i);
+						if (name) validateInputLength.call(this, name, INPUT_LIMITS.VALIDATE_NAME, 'Name', i);
+						if (ip) validateInputLength.call(this, ip, INPUT_LIMITS.IP_ADDRESS, 'IP Address', i);
 
 						// Validate required inputs
 						if (!email) {
