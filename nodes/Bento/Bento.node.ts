@@ -7,6 +7,18 @@ import type {
 import { NodeConnectionType, NodeOperationError } from 'n8n-workflow';
 import { Buffer } from 'buffer';
 
+// Email validation regex constant
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Helper function to validate email format
+ * @param email - The email address to validate
+ * @returns true if the email format is valid, false otherwise
+ */
+function isValidEmail(email: string): boolean {
+	return EMAIL_REGEX.test(email);
+}
+
 export class Bento implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Bento',
@@ -403,6 +415,11 @@ export class Bento implements INodeType {
 				},
 				options: [
 					{
+						name: 'Add Field',
+						value: 'add_field',
+						description: 'Add a custom field to the subscriber',
+					},
+					{
 						name: 'Add Tag',
 						value: 'add_tag',
 						description: 'Add a tag to the subscriber',
@@ -413,19 +430,19 @@ export class Bento implements INodeType {
 						description: 'Add a tag to the subscriber via event',
 					},
 					{
-						name: 'Remove Tag',
-						value: 'remove_tag',
-						description: 'Remove a tag from the subscriber',
-					},
-					{
-						name: 'Add Field',
-						value: 'add_field',
-						description: 'Add a custom field to the subscriber',
+						name: 'Change Email',
+						value: 'change_email',
+						description: 'Change the email address of the subscriber',
 					},
 					{
 						name: 'Remove Field',
 						value: 'remove_field',
 						description: 'Remove a custom field from the subscriber',
+					},
+					{
+						name: 'Remove Tag',
+						value: 'remove_tag',
+						description: 'Remove a tag from the subscriber',
 					},
 					{
 						name: 'Subscribe',
@@ -436,11 +453,6 @@ export class Bento implements INodeType {
 						name: 'Unsubscribe',
 						value: 'unsubscribe',
 						description: 'Unsubscribe the email address',
-					},
-					{
-						name: 'Change Email',
-						value: 'change_email',
-						description: 'Change the email address of the subscriber',
 					},
 				],
 				default: 'add_tag',
@@ -571,8 +583,7 @@ export class Bento implements INodeType {
 						}
 
 						// Validate email format
-						const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-						if (!emailRegex.test(email)) {
+						if (!isValidEmail(email)) {
 							throw new NodeOperationError(this.getNode(), 'Invalid email format', {
 								itemIndex: i,
 							});
@@ -653,8 +664,7 @@ export class Bento implements INodeType {
 						}
 
 						// Validate email format
-						const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-						if (!emailRegex.test(email)) {
+						if (!isValidEmail(email)) {
 							throw new NodeOperationError(this.getNode(), 'Invalid email format', {
 								itemIndex: i,
 							});
@@ -704,8 +714,7 @@ export class Bento implements INodeType {
 						}
 
 						// Validate email format
-						const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-						if (!emailRegex.test(email)) {
+						if (!isValidEmail(email)) {
 							throw new NodeOperationError(this.getNode(), 'Invalid email format', {
 								itemIndex: i,
 							});
@@ -1001,8 +1010,7 @@ export class Bento implements INodeType {
 						}
 
 						// Validate email format
-						const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-						if (!emailRegex.test(email)) {
+						if (!isValidEmail(email)) {
 							throw new NodeOperationError(this.getNode(), 'Invalid email format', {
 								itemIndex: i,
 							});
@@ -1046,7 +1054,7 @@ export class Bento implements INodeType {
 										itemIndex: i,
 									});
 								}
-								if (!emailRegex.test(newEmail)) {
+								if (!isValidEmail(newEmail)) {
 									throw new NodeOperationError(this.getNode(), 'Invalid new email format', {
 										itemIndex: i,
 									});
@@ -1116,8 +1124,7 @@ export class Bento implements INodeType {
 						}
 
 						// Validate email format
-						const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-						if (!emailRegex.test(email)) {
+						if (!isValidEmail(email)) {
 							throw new NodeOperationError(this.getNode(), 'Invalid email format', {
 								itemIndex: i,
 							});
@@ -1242,7 +1249,7 @@ async function makeBentoRequest(
 		const uuid = siteUuid.trim();
 
 		// Debug credential info (without exposing sensitive data)
-		console.log('Bento Credentials Debug:', {
+		this.logger.debug('Bento Credentials Debug', {
 			hasPublishableKey: !!pubKey,
 			publishableKeyLength: pubKey.length,
 			hasSecretKey: !!secKey,
@@ -1269,8 +1276,8 @@ async function makeBentoRequest(
 		const separator = endpoint.includes('?') ? '&' : '?';
 		const fullUrl = `${baseUrl}${endpoint}${separator}site_uuid=${encodedUuid}`;
 
-		// Debug logging (remove in production)
-		console.log('Bento API Request:', {
+		// Debug logging for API requests
+		this.logger.debug('Bento API Request', {
 			method,
 			endpoint,
 			fullUrl,
