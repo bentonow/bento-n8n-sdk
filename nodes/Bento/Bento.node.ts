@@ -7,8 +7,8 @@ import type {
 import { NodeConnectionType, NodeOperationError } from 'n8n-workflow';
 import { Buffer } from 'buffer';
 
-// Email validation regex constant
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Email validation regex constant - RFC-compliant
+const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
 
 // Input validation constants
 const INPUT_LIMITS = {
@@ -28,12 +28,83 @@ const INPUT_LIMITS = {
 } as const;
 
 /**
- * Helper function to validate email format
+ * Helper function to validate email format with enhanced security
  * @param email - The email address to validate
  * @returns true if the email format is valid, false otherwise
  */
 function isValidEmail(email: string): boolean {
-	return EMAIL_REGEX.test(email);
+	// Check if email is a string and not empty
+	if (typeof email !== 'string' || email.trim() === '') {
+		return false;
+	}
+	
+	// Trim the email
+	const trimmedEmail = email.trim();
+	
+	// Check length (RFC 5321 standard)
+	if (trimmedEmail.length > 254) {
+		return false;
+	}
+	
+	// Check for basic format using enhanced regex
+	if (!EMAIL_REGEX.test(trimmedEmail)) {
+		return false;
+	}
+	
+	// Additional security checks
+	// Prevent emails with consecutive dots
+	if (trimmedEmail.includes('..')) {
+		return false;
+	}
+	
+	// Prevent emails starting or ending with dots
+	if (trimmedEmail.startsWith('.') || trimmedEmail.endsWith('.')) {
+		return false;
+	}
+	
+	// Split and validate local and domain parts
+	const [localPart, domainPart] = trimmedEmail.split('@');
+	
+	// Local part validation (before @)
+	if (localPart.length > 64) { // RFC 5321 limit
+		return false;
+	}
+	
+	// Domain part validation (after @)
+	if (domainPart.length > 253) { // RFC 5321 limit
+		return false;
+	}
+	
+	// Check for valid domain structure
+	const domainParts = domainPart.split('.');
+	if (domainParts.length < 2) {
+		return false;
+	}
+	
+	// Each domain part should be valid
+	for (const part of domainParts) {
+		if (part.length === 0 || part.length > 63) {
+			return false;
+		}
+		// Domain parts should not start or end with hyphens
+		if (part.startsWith('-') || part.endsWith('-')) {
+			return false;
+		}
+	}
+	
+	return true;
+}
+
+/**
+ * Sanitizes email input by trimming and converting to lowercase
+ * @param email - The email address to sanitize
+ * @returns sanitized email string
+ */
+function sanitizeEmail(email: string): string {
+	if (typeof email !== 'string') {
+		return '';
+	}
+	return email.trim().toLowerCase();
 }
 
 /**
@@ -610,7 +681,7 @@ export class Bento implements INodeType {
 
 				switch (operation) {
 					case 'createSubscriber': {
-						const email = this.getNodeParameter('email', i) as string;
+						const email = sanitizeEmail(this.getNodeParameter('email', i) as string);
 						const firstName = this.getNodeParameter('firstName', i) as string;
 						const lastName = this.getNodeParameter('lastName', i) as string;
 						const customFields = this.getNodeParameter('customFields', i) as any;
@@ -701,7 +772,7 @@ export class Bento implements INodeType {
 						break;
 					}
 					case 'getSubscriber': {
-						const email = this.getNodeParameter('email', i) as string;
+						const email = sanitizeEmail(this.getNodeParameter('email', i) as string);
 
 						// Validate input lengths
 						validateInputLength.call(this, email, INPUT_LIMITS.EMAIL, 'Email', i);
@@ -751,7 +822,7 @@ export class Bento implements INodeType {
 						break;
 					}
 					case 'updateSubscriber': {
-						const email = this.getNodeParameter('email', i) as string;
+						const email = sanitizeEmail(this.getNodeParameter('email', i) as string);
 						const firstName = this.getNodeParameter('firstName', i) as string;
 						const lastName = this.getNodeParameter('lastName', i) as string;
 						const customFields = this.getNodeParameter('customFields', i) as any;
@@ -912,8 +983,8 @@ export class Bento implements INodeType {
 						break;
 					}
 					case 'sendTransactionalEmail': {
-						const recipientEmail = this.getNodeParameter('recipientEmail', i) as string;
-						const fromEmail = this.getNodeParameter('fromEmail', i) as string;
+						const recipientEmail = sanitizeEmail(this.getNodeParameter('recipientEmail', i) as string);
+						const fromEmail = sanitizeEmail(this.getNodeParameter('fromEmail', i) as string);
 						const subject = this.getNodeParameter('subject', i) as string;
 						const emailType = this.getNodeParameter('emailType', i) as string;
 						const transactional = this.getNodeParameter('transactional', i) as boolean;
@@ -947,14 +1018,13 @@ export class Bento implements INodeType {
 							});
 						}
 
-						// Validate email format
-						const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-						if (!emailRegex.test(recipientEmail)) {
+						// Validate email format using centralized validation
+						if (!isValidEmail(recipientEmail)) {
 							throw new NodeOperationError(this.getNode(), 'Invalid recipient email format', {
 								itemIndex: i,
 							});
 						}
-						if (!emailRegex.test(fromEmail)) {
+						if (!isValidEmail(fromEmail)) {
 							throw new NodeOperationError(this.getNode(), 'Invalid from email format', {
 								itemIndex: i,
 							});
@@ -1052,7 +1122,7 @@ export class Bento implements INodeType {
 						break;
 					}
 					case 'subscriberCommand': {
-						const email = this.getNodeParameter('commandEmail', i) as string;
+						const email = sanitizeEmail(this.getNodeParameter('commandEmail', i) as string);
 						const command = this.getNodeParameter('command', i) as string;
 
 						// Validate input lengths
@@ -1080,7 +1150,7 @@ export class Bento implements INodeType {
 
 						// Get new email for change_email command
 						if (command === 'change_email') {
-							newEmail = this.getNodeParameter('newEmail', i) as string;
+							newEmail = sanitizeEmail(this.getNodeParameter('newEmail', i) as string);
 							validateInputLength.call(this, newEmail, INPUT_LIMITS.EMAIL, 'New Email', i);
 						}
 
@@ -1194,7 +1264,7 @@ export class Bento implements INodeType {
 						break;
 					}
 					case 'validateEmail': {
-						const email = this.getNodeParameter('validateEmail', i) as string;
+						const email = sanitizeEmail(this.getNodeParameter('validateEmail', i) as string);
 						const name = this.getNodeParameter('validateName', i) as string;
 						const ip = this.getNodeParameter('validateIp', i) as string;
 
