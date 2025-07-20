@@ -1248,16 +1248,6 @@ async function makeBentoRequest(
 		const secKey = secretKey.trim();
 		const uuid = siteUuid.trim();
 
-		// Debug credential info (without exposing sensitive data)
-		this.logger.debug('Bento Credentials Debug', {
-			hasPublishableKey: !!pubKey,
-			publishableKeyLength: pubKey.length,
-			hasSecretKey: !!secKey,
-			secretKeyLength: secKey.length,
-			hasSiteUuid: !!uuid,
-			siteUuidLength: uuid.length,
-			siteUuidPreview: uuid ? `${uuid.substring(0, 8)}...${uuid.substring(uuid.length - 4)}` : 'N/A'
-		});
 
 		// Create Basic auth header
 		const authHeader = 'Basic ' + Buffer.from(`${pubKey}:${secKey}`).toString('base64');
@@ -1276,14 +1266,6 @@ async function makeBentoRequest(
 		const separator = endpoint.includes('?') ? '&' : '?';
 		const fullUrl = `${baseUrl}${endpoint}${separator}site_uuid=${encodedUuid}`;
 
-		// Debug logging for API requests
-		this.logger.debug('Bento API Request', {
-			method,
-			endpoint,
-			fullUrl,
-			hasBody: !!body,
-			bodyKeys: body ? Object.keys(body) : []
-		});
 
 		// Additional validation before making the request
 		try {
@@ -1296,11 +1278,6 @@ DEBUG INFORMATION:
 - Endpoint: ${endpoint}
 - Method: ${method}
 - Has Credentials: ${!!credentials}
-- Has Publishable Key: ${!!pubKey} (length: ${pubKey.length})
-- Has Secret Key: ${!!secKey} (length: ${secKey.length})
-- Has Site UUID: ${!!uuid} (length: ${uuid.length})
-- Site UUID Preview: ${uuid ? `${uuid.substring(0, 8)}...${uuid.substring(uuid.length - 4)}` : 'N/A'}
-- Encoded UUID: ${encodedUuid}
 - URL Validation Error: ${urlError.message}`;
 
 			throw new NodeOperationError(
@@ -1365,20 +1342,15 @@ DEBUG INFORMATION:
 				errorMessage = error.message;
 			}
 
-			// Create a detailed error message that includes debug info
-			const detailedErrorMessage = `Bento API Error (${statusCode}): ${errorMessage}
+		// Create a detailed error message with safe debug info
+		const detailedErrorMessage = `Bento API Error (${statusCode}): ${errorMessage}
 
 DEBUG INFORMATION:
 - URL: ${fullUrl}
 - Endpoint: ${endpoint}
 - Method: ${method}
 - Has Credentials: ${!!credentials}
-- Has Publishable Key: ${!!pubKey} (length: ${pubKey.length})
-- Has Secret Key: ${!!secKey} (length: ${secKey.length})
-- Has Site UUID: ${!!uuid} (length: ${uuid.length})
-- Site UUID Preview: ${uuid ? `${uuid.substring(0, 8)}...${uuid.substring(uuid.length - 4)}` : 'N/A'}
 - Original Error: ${error.message}`;
-
 			throw new NodeOperationError(
 				this.getNode(),
 				detailedErrorMessage,
