@@ -54,6 +54,12 @@ export class Bento implements INodeType {
 						action: 'Send a transactional email',
 					},
 					{
+						name: 'Subscriber Command',
+						value: 'subscriberCommand',
+						description: 'Execute commands on subscribers (add/remove tags, fields, subscribe/unsubscribe, etc.)',
+						action: 'Execute a subscriber command',
+					},
+					{
 						name: 'Track Event',
 						value: 'trackEvent',
 						description: 'Record custom events and behaviors for subscriber segmentation and automation',
@@ -64,6 +70,12 @@ export class Bento implements INodeType {
 						value: 'updateSubscriber',
 						description: 'Modify subscriber profile information and custom attributes',
 						action: 'Update a subscriber',
+					},
+					{
+						name: 'Validate Email',
+						value: 'validateEmail',
+						description: 'Validate email address for spam/throwaway detection',
+						action: 'Validate an email address',
 					},
 				],
 				default: 'createSubscriber',
@@ -228,8 +240,8 @@ export class Bento implements INodeType {
 				description: 'The email address of the recipient',
 			},
 			{
-				displayName: 'Template ID',
-				name: 'templateId',
+				displayName: 'From Email',
+				name: 'fromEmail',
 				type: 'string',
 				required: true,
 				displayOptions: {
@@ -238,51 +250,96 @@ export class Bento implements INodeType {
 					},
 				},
 				default: '',
-				placeholder: 'welcome-email-template',
-				description: 'The ID or slug of the Bento email template to use',
+				placeholder: 'noreply@yourcompany.com',
+				description: 'The sender email address',
 			},
 			{
 				displayName: 'Subject',
 				name: 'subject',
 				type: 'string',
+				required: true,
 				displayOptions: {
 					show: {
 						operation: ['sendTransactionalEmail'],
 					},
 				},
 				default: '',
-				placeholder: 'Welcome to our platform!',
-				description: 'Email subject line (optional if template has default subject)',
+				placeholder: 'Reset Password',
+				description: 'Email subject line',
 			},
 			{
-				displayName: 'From Name',
-				name: 'fromName',
+				displayName: 'Email Type',
+				name: 'emailType',
+				type: 'options',
+				displayOptions: {
+					show: {
+						operation: ['sendTransactionalEmail'],
+					},
+				},
+				options: [
+					{
+						name: 'HTML Body',
+						value: 'html',
+						description: 'Send HTML formatted email',
+					},
+					{
+						name: 'Text Body',
+						value: 'text',
+						description: 'Send plain text email',
+					},
+				],
+				default: 'html',
+				description: 'Type of email body to send',
+			},
+			{
+				displayName: 'HTML Body',
+				name: 'htmlBody',
 				type: 'string',
+				typeOptions: {
+					rows: 8,
+				},
 				displayOptions: {
 					show: {
 						operation: ['sendTransactionalEmail'],
+						emailType: ['html'],
 					},
 				},
 				default: '',
-				placeholder: 'Your Company',
-				description: 'The sender name (optional if template has default)',
+				placeholder: '<p>Here is a link to reset your password ... {{ link }}</p>',
+				description: 'HTML content of the email (supports template variables like {{ variable_name }})',
 			},
 			{
-				displayName: 'From Email',
-				name: 'fromEmail',
+				displayName: 'Text Body',
+				name: 'textBody',
 				type: 'string',
+				typeOptions: {
+					rows: 8,
+				},
+				displayOptions: {
+					show: {
+						operation: ['sendTransactionalEmail'],
+						emailType: ['text'],
+					},
+				},
+				default: '',
+				placeholder: 'Here is a link to reset your password ... {{ link }}',
+				description: 'Plain text content of the email (supports template variables like {{ variable_name }})',
+			},
+			{
+				displayName: 'Transactional',
+				name: 'transactional',
+				type: 'boolean',
 				displayOptions: {
 					show: {
 						operation: ['sendTransactionalEmail'],
 					},
 				},
-				default: '',
-				placeholder: 'noreply@yourcompany.com',
-				description: 'The sender email address (optional if template has default)',
+				default: false,
+				description: 'Whether this is a transactional email (affects tracking and analytics)',
 			},
 			{
-				displayName: 'Dynamic Data',
-				name: 'dynamicData',
+				displayName: 'Personalizations',
+				name: 'personalizations',
 				type: 'fixedCollection',
 				typeOptions: {
 					multipleValues: true,
@@ -295,29 +352,196 @@ export class Bento implements INodeType {
 				default: {},
 				options: [
 					{
-						name: 'data',
-						displayName: 'Data',
+						name: 'personalization',
+						displayName: 'Personalization',
 						values: [
 							{
 								displayName: 'Key',
 								name: 'key',
 								type: 'string',
 								default: '',
-								placeholder: 'first_name',
-								description: 'Template variable name',
+								placeholder: 'link',
+								description: 'Template variable name (without {{ }})',
 							},
 							{
 								displayName: 'Value',
 								name: 'value',
 								type: 'string',
 								default: '',
-								placeholder: 'John',
+								placeholder: 'https://example.com/reset',
 								description: 'Value to substitute in template',
 							},
 						],
 					},
 				],
-				description: 'Dynamic data to personalize the email template (e.g., first_name, order_total)',
+				description: 'Template variables to personalize the email (e.g., link, first_name, order_total)',
+			},
+			// Subscriber Command parameters
+			{
+				displayName: 'Email',
+				name: 'commandEmail',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						operation: ['subscriberCommand'],
+					},
+				},
+				default: '',
+				placeholder: 'user@example.com',
+				description: 'The email address of the subscriber to execute the command on',
+			},
+			{
+				displayName: 'Command',
+				name: 'command',
+				type: 'options',
+				required: true,
+				displayOptions: {
+					show: {
+						operation: ['subscriberCommand'],
+					},
+				},
+				options: [
+					{
+						name: 'Add Tag',
+						value: 'add_tag',
+						description: 'Add a tag to the subscriber',
+					},
+					{
+						name: 'Add Tag via Event',
+						value: 'add_tag_via_event',
+						description: 'Add a tag to the subscriber via event',
+					},
+					{
+						name: 'Remove Tag',
+						value: 'remove_tag',
+						description: 'Remove a tag from the subscriber',
+					},
+					{
+						name: 'Add Field',
+						value: 'add_field',
+						description: 'Add a custom field to the subscriber',
+					},
+					{
+						name: 'Remove Field',
+						value: 'remove_field',
+						description: 'Remove a custom field from the subscriber',
+					},
+					{
+						name: 'Subscribe',
+						value: 'subscribe',
+						description: 'Subscribe the email address',
+					},
+					{
+						name: 'Unsubscribe',
+						value: 'unsubscribe',
+						description: 'Unsubscribe the email address',
+					},
+					{
+						name: 'Change Email',
+						value: 'change_email',
+						description: 'Change the email address of the subscriber',
+					},
+				],
+				default: 'add_tag',
+				description: 'The command to execute on the subscriber',
+			},
+			{
+				displayName: 'Tag/Field Name',
+				name: 'query',
+				type: 'string',
+				displayOptions: {
+					show: {
+						operation: ['subscriberCommand'],
+						command: ['add_tag', 'add_tag_via_event', 'remove_tag', 'remove_field'],
+					},
+				},
+				default: '',
+				placeholder: 'vip_customer',
+				description: 'The name of the tag or field to add/remove',
+			},
+			{
+				displayName: 'Field Key',
+				name: 'fieldKey',
+				type: 'string',
+				displayOptions: {
+					show: {
+						operation: ['subscriberCommand'],
+						command: ['add_field'],
+					},
+				},
+				default: '',
+				placeholder: 'company',
+				description: 'The key/name of the custom field',
+			},
+			{
+				displayName: 'Field Value',
+				name: 'fieldValue',
+				type: 'string',
+				displayOptions: {
+					show: {
+						operation: ['subscriberCommand'],
+						command: ['add_field'],
+					},
+				},
+				default: '',
+				placeholder: 'Acme Corp',
+				description: 'The value of the custom field',
+			},
+			{
+				displayName: 'New Email',
+				name: 'newEmail',
+				type: 'string',
+				displayOptions: {
+					show: {
+						operation: ['subscriberCommand'],
+						command: ['change_email'],
+					},
+				},
+				default: '',
+				placeholder: 'newemail@example.com',
+				description: 'The new email address for the subscriber',
+			},
+			// Validate Email parameters
+			{
+				displayName: 'Email',
+				name: 'validateEmail',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						operation: ['validateEmail'],
+					},
+				},
+				default: '',
+				placeholder: 'test@example.com',
+				description: 'The email address to validate',
+			},
+			{
+				displayName: 'Name',
+				name: 'validateName',
+				type: 'string',
+				displayOptions: {
+					show: {
+						operation: ['validateEmail'],
+					},
+				},
+				default: '',
+				placeholder: 'John Doe',
+				description: 'The name associated with the email (optional but recommended for better validation)',
+			},
+			{
+				displayName: 'IP Address',
+				name: 'validateIp',
+				type: 'string',
+				displayOptions: {
+					show: {
+						operation: ['validateEmail'],
+					},
+				},
+				default: '',
+				placeholder: '1.1.1.1',
+				description: 'The IP address associated with the email (optional but recommended for better validation)',
 			},
 		],
 	};
@@ -421,11 +645,49 @@ export class Bento implements INodeType {
 					case 'getSubscriber': {
 						const email = this.getNodeParameter('email', i) as string;
 
-						responseData = {
-							operation: 'getSubscriber',
-							email,
-							message: 'Get subscriber placeholder - implement API call',
-						};
+						// Validate required inputs
+						if (!email) {
+							throw new NodeOperationError(this.getNode(), 'Email is required for getting subscriber information', {
+								itemIndex: i,
+							});
+						}
+
+						// Validate email format
+						const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+						if (!emailRegex.test(email)) {
+							throw new NodeOperationError(this.getNode(), 'Invalid email format', {
+								itemIndex: i,
+							});
+						}
+
+						try {
+							// Use the fetch subscribers API endpoint with email parameter
+							const response = await makeBentoRequest.call(
+								this,
+								'GET',
+								`/api/v1/fetch/subscribers?email=${encodeURIComponent(email)}`,
+								undefined, // No body for GET request
+								i
+							);
+
+							responseData = {
+								operation: 'getSubscriber',
+								success: true,
+								email,
+								subscriber: response,
+								apiResponse: response,
+								message: 'Subscriber retrieved successfully',
+							};
+						} catch (error) {
+							// If the API call fails, return error details
+							responseData = {
+								operation: 'getSubscriber',
+								success: false,
+								email,
+								error: error.message,
+								message: 'Failed to get subscriber - check credentials and email format',
+							};
+						}
 						break;
 					}
 					case 'updateSubscriber': {
@@ -579,15 +841,24 @@ export class Bento implements INodeType {
 					}
 					case 'sendTransactionalEmail': {
 						const recipientEmail = this.getNodeParameter('recipientEmail', i) as string;
-						const templateId = this.getNodeParameter('templateId', i) as string;
-						const subject = this.getNodeParameter('subject', i) as string;
-						const fromName = this.getNodeParameter('fromName', i) as string;
 						const fromEmail = this.getNodeParameter('fromEmail', i) as string;
-						const dynamicData = this.getNodeParameter('dynamicData', i) as any;
+						const subject = this.getNodeParameter('subject', i) as string;
+						const emailType = this.getNodeParameter('emailType', i) as string;
+						const transactional = this.getNodeParameter('transactional', i) as boolean;
+						const personalizations = this.getNodeParameter('personalizations', i) as any;
+
+						// Get the appropriate body based on email type
+						let htmlBody = '';
+						let textBody = '';
+						if (emailType === 'html') {
+							htmlBody = this.getNodeParameter('htmlBody', i) as string;
+						} else {
+							textBody = this.getNodeParameter('textBody', i) as string;
+						}
 
 						// Validate required inputs
-						if (!recipientEmail || !templateId) {
-							throw new NodeOperationError(this.getNode(), 'Recipient email and template ID are required for sending transactional emails', {
+						if (!recipientEmail || !fromEmail || !subject) {
+							throw new NodeOperationError(this.getNode(), 'Recipient email, from email, and subject are required for sending transactional emails', {
 								itemIndex: i,
 							});
 						}
@@ -599,35 +870,66 @@ export class Bento implements INodeType {
 								itemIndex: i,
 							});
 						}
+						if (!emailRegex.test(fromEmail)) {
+							throw new NodeOperationError(this.getNode(), 'Invalid from email format', {
+								itemIndex: i,
+							});
+						}
 
-						// Build dynamic data object
-						const templateData: { [key: string]: string } = {};
-						if (dynamicData.data) {
-							for (const item of dynamicData.data) {
+						// Validate email body based on type
+						if (emailType === 'html' && !htmlBody) {
+							throw new NodeOperationError(this.getNode(), 'HTML body is required when email type is HTML', {
+								itemIndex: i,
+							});
+						}
+						if (emailType === 'text' && !textBody) {
+							throw new NodeOperationError(this.getNode(), 'Text body is required when email type is Text', {
+								itemIndex: i,
+							});
+						}
+						if (!htmlBody && !textBody) {
+							throw new NodeOperationError(this.getNode(), 'Either HTML body or Text body is required', {
+								itemIndex: i,
+							});
+						}
+
+						// Build personalizations object
+						const personalizationsData: { [key: string]: string } = {};
+						if (personalizations.personalization) {
+							for (const item of personalizations.personalization) {
 								if (item.key && item.value) {
-									templateData[item.key] = item.value;
+									personalizationsData[item.key] = item.value;
 								}
 							}
 						}
 
-						// Build request body
-						const requestBody: any = {
+						// Build email object
+						const emailData: any = {
 							to: recipientEmail,
-							template: templateId,
-							personalizations: templateData,
+							from: fromEmail,
+							subject: subject,
+							transactional: transactional,
+							personalizations: personalizationsData,
 						};
 
-						// Add optional fields if provided
-						if (subject) requestBody.subject = subject;
-						if (fromName) requestBody.from_name = fromName;
-						if (fromEmail) requestBody.from_email = fromEmail;
+						// Add body based on type
+						if (emailType === 'html') {
+							emailData.html_body = htmlBody;
+						} else {
+							emailData.text_body = textBody;
+						}
+
+						// Build request body for batch emails API
+						const requestBody = {
+							emails: [emailData]
+						};
 
 						try {
-							// Use the HTTP helper to send the transactional email
+							// Use the batch emails API endpoint
 							const response = await makeBentoRequest.call(
 								this,
 								'POST',
-								'/api/v1/emails/send',
+								'/api/v1/batch/emails',
 								requestBody,
 								i
 							);
@@ -637,9 +939,11 @@ export class Bento implements INodeType {
 								success: true,
 								email: {
 									recipient: recipientEmail,
-									template: templateId,
-									subject,
-									personalizations: templateData,
+									from: fromEmail,
+									subject: subject,
+									type: emailType,
+									transactional: transactional,
+									personalizations: personalizationsData,
 								},
 								apiResponse: response,
 								message: 'Transactional email sent successfully',
@@ -651,12 +955,216 @@ export class Bento implements INodeType {
 								success: false,
 								email: {
 									recipient: recipientEmail,
-									template: templateId,
-									subject,
-									personalizations: templateData,
+									from: fromEmail,
+									subject: subject,
+									type: emailType,
+									transactional: transactional,
+									personalizations: personalizationsData,
 								},
 								error: error.message,
-								message: 'Failed to send transactional email - check credentials and template ID',
+								message: 'Failed to send transactional email - check credentials and email content',
+							};
+						}
+						break;
+					}
+					case 'subscriberCommand': {
+						const email = this.getNodeParameter('commandEmail', i) as string;
+						const command = this.getNodeParameter('command', i) as string;
+
+						// Get parameters conditionally based on command type
+						let query = '';
+						let fieldKey = '';
+						let fieldValue = '';
+						let newEmail = '';
+
+						// Get query parameter for commands that need it
+						if (['add_tag', 'add_tag_via_event', 'remove_tag', 'remove_field'].includes(command)) {
+							query = this.getNodeParameter('query', i) as string;
+						}
+
+						// Get field parameters for add_field command
+						if (command === 'add_field') {
+							fieldKey = this.getNodeParameter('fieldKey', i) as string;
+							fieldValue = this.getNodeParameter('fieldValue', i) as string;
+						}
+
+						// Get new email for change_email command
+						if (command === 'change_email') {
+							newEmail = this.getNodeParameter('newEmail', i) as string;
+						}
+
+						// Validate required inputs
+						if (!email) {
+							throw new NodeOperationError(this.getNode(), 'Email is required for subscriber commands', {
+								itemIndex: i,
+							});
+						}
+
+						// Validate email format
+						const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+						if (!emailRegex.test(email)) {
+							throw new NodeOperationError(this.getNode(), 'Invalid email format', {
+								itemIndex: i,
+							});
+						}
+
+						// Build command object based on the selected command
+						const commandObj: any = {
+							command: command,
+							email: email,
+						};
+
+						// Add query based on command type
+						switch (command) {
+							case 'add_tag':
+							case 'add_tag_via_event':
+							case 'remove_tag':
+							case 'remove_field':
+								if (!query) {
+									throw new NodeOperationError(this.getNode(), `Query is required for ${command} command`, {
+										itemIndex: i,
+									});
+								}
+								commandObj.query = query;
+								break;
+
+							case 'add_field':
+								if (!fieldKey || !fieldValue) {
+									throw new NodeOperationError(this.getNode(), 'Field key and value are required for add_field command', {
+										itemIndex: i,
+									});
+								}
+								commandObj.query = {
+									key: fieldKey,
+									value: fieldValue,
+								};
+								break;
+
+							case 'change_email':
+								if (!newEmail) {
+									throw new NodeOperationError(this.getNode(), 'New email is required for change_email command', {
+										itemIndex: i,
+									});
+								}
+								if (!emailRegex.test(newEmail)) {
+									throw new NodeOperationError(this.getNode(), 'Invalid new email format', {
+										itemIndex: i,
+									});
+								}
+								commandObj.query = newEmail;
+								break;
+
+							case 'subscribe':
+							case 'unsubscribe':
+								// No additional query needed for these commands
+								break;
+
+							default:
+								throw new NodeOperationError(this.getNode(), `Unknown command: ${command}`, {
+									itemIndex: i,
+								});
+						}
+
+						// Build request body for commands API
+						const requestBody = {
+							command: [commandObj]
+						};
+
+						try {
+							// Use the fetch commands API endpoint
+							const response = await makeBentoRequest.call(
+								this,
+								'POST',
+								'/api/v1/fetch/commands',
+								requestBody,
+								i
+							);
+
+							responseData = {
+								operation: 'subscriberCommand',
+								success: true,
+								command: command,
+								email: email,
+								query: commandObj.query,
+								apiResponse: response,
+								message: `Subscriber command '${command}' executed successfully`,
+							};
+						} catch (error) {
+							// If the API call fails, return error details
+							responseData = {
+								operation: 'subscriberCommand',
+								success: false,
+								command: command,
+								email: email,
+								query: commandObj.query,
+								error: error.message,
+								message: `Failed to execute subscriber command '${command}' - check credentials and parameters`,
+							};
+						}
+						break;
+					}
+					case 'validateEmail': {
+						const email = this.getNodeParameter('validateEmail', i) as string;
+						const name = this.getNodeParameter('validateName', i) as string;
+						const ip = this.getNodeParameter('validateIp', i) as string;
+
+						// Validate required inputs
+						if (!email) {
+							throw new NodeOperationError(this.getNode(), 'Email is required for validation', {
+								itemIndex: i,
+							});
+						}
+
+						// Validate email format
+						const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+						if (!emailRegex.test(email)) {
+							throw new NodeOperationError(this.getNode(), 'Invalid email format', {
+								itemIndex: i,
+							});
+						}
+
+						// Build query parameters for the validation endpoint
+						const queryParams = new URLSearchParams();
+						queryParams.append('email', email);
+						
+						if (name) {
+							queryParams.append('name', name);
+						}
+						
+						if (ip) {
+							queryParams.append('ip', ip);
+						}
+
+						try {
+							// Use the experimental validation API endpoint
+							const response = await makeBentoRequest.call(
+								this,
+								'POST',
+								`/api/v1/experimental/validation?${queryParams.toString()}`,
+								undefined, // No body for this endpoint
+								i
+							);
+
+							responseData = {
+								operation: 'validateEmail',
+								success: true,
+								email,
+								name: name || undefined,
+								ip: ip || undefined,
+								validation: response,
+								apiResponse: response,
+								message: 'Email validation completed successfully',
+							};
+						} catch (error) {
+							// If the API call fails, return error details
+							responseData = {
+								operation: 'validateEmail',
+								success: false,
+								email,
+								name: name || undefined,
+								ip: ip || undefined,
+								error: error.message,
+								message: 'Failed to validate email - check credentials and email format',
 							};
 						}
 						break;
@@ -708,29 +1216,99 @@ async function makeBentoRequest(
 		}
 
 		const { publishableKey, secretKey, siteUuid } = credentials;
-		if (!publishableKey || !secretKey || !siteUuid) {
-			throw new NodeOperationError(this.getNode(), 'Missing required credentials: publishableKey, secretKey, and siteUuid are all required', {
+		
+		// Validate all required credentials are present and non-empty
+		if (!publishableKey || typeof publishableKey !== 'string' || publishableKey.trim() === '') {
+			throw new NodeOperationError(this.getNode(), 'Missing or invalid publishableKey in credentials', {
+				itemIndex,
+			});
+		}
+		
+		if (!secretKey || typeof secretKey !== 'string' || secretKey.trim() === '') {
+			throw new NodeOperationError(this.getNode(), 'Missing or invalid secretKey in credentials', {
+				itemIndex,
+			});
+		}
+		
+		if (!siteUuid || typeof siteUuid !== 'string' || siteUuid.trim() === '') {
+			throw new NodeOperationError(this.getNode(), 'Missing or invalid siteUuid in credentials', {
 				itemIndex,
 			});
 		}
 
 		// Type cast credentials to strings for safe usage
-		const pubKey = publishableKey as string;
-		const secKey = secretKey as string;
-		const uuid = siteUuid as string;
+		const pubKey = publishableKey.trim();
+		const secKey = secretKey.trim();
+		const uuid = siteUuid.trim();
+
+		// Debug credential info (without exposing sensitive data)
+		console.log('Bento Credentials Debug:', {
+			hasPublishableKey: !!pubKey,
+			publishableKeyLength: pubKey.length,
+			hasSecretKey: !!secKey,
+			secretKeyLength: secKey.length,
+			hasSiteUuid: !!uuid,
+			siteUuidLength: uuid.length,
+			siteUuidPreview: uuid ? `${uuid.substring(0, 8)}...${uuid.substring(uuid.length - 4)}` : 'N/A'
+		});
 
 		// Create Basic auth header
 		const authHeader = 'Basic ' + Buffer.from(`${pubKey}:${secKey}`).toString('base64');
 
 		// Build the full URL with site_uuid parameter
 		const baseUrl = 'https://app.bentonow.com';
+		
+		// Validate and encode the site_uuid
+		if (!uuid || typeof uuid !== 'string' || uuid.trim() === '') {
+			throw new NodeOperationError(this.getNode(), 'Invalid site_uuid in credentials - must be a non-empty string', {
+				itemIndex,
+			});
+		}
+		
+		const encodedUuid = encodeURIComponent(uuid.trim());
 		const separator = endpoint.includes('?') ? '&' : '?';
-		const fullUrl = `${baseUrl}${endpoint}${separator}site_uuid=${uuid}`;
+		const fullUrl = `${baseUrl}${endpoint}${separator}site_uuid=${encodedUuid}`;
+
+		// Debug logging (remove in production)
+		console.log('Bento API Request:', {
+			method,
+			endpoint,
+			fullUrl,
+			hasBody: !!body,
+			bodyKeys: body ? Object.keys(body) : []
+		});
+
+		// Additional validation before making the request
+		try {
+			new URL(fullUrl); // This will throw if the URL is invalid
+		} catch (urlError) {
+			const detailedErrorMessage = `Invalid URL constructed: ${fullUrl}
+
+DEBUG INFORMATION:
+- URL: ${fullUrl}
+- Endpoint: ${endpoint}
+- Method: ${method}
+- Has Credentials: ${!!credentials}
+- Has Publishable Key: ${!!pubKey} (length: ${pubKey.length})
+- Has Secret Key: ${!!secKey} (length: ${secKey.length})
+- Has Site UUID: ${!!uuid} (length: ${uuid.length})
+- Site UUID Preview: ${uuid ? `${uuid.substring(0, 8)}...${uuid.substring(uuid.length - 4)}` : 'N/A'}
+- Encoded UUID: ${encodedUuid}
+- URL Validation Error: ${urlError.message}`;
+
+			throw new NodeOperationError(
+				this.getNode(),
+				detailedErrorMessage,
+				{
+					itemIndex,
+				}
+			);
+		}
 
 		try {
 			const options: any = {
 				method,
-				uri: fullUrl,
+				url: fullUrl, // Changed from 'uri' to 'url' for n8n's httpRequest
 				headers: {
 					Authorization: authHeader,
 					'Content-Type': 'application/json',
@@ -780,9 +1358,23 @@ async function makeBentoRequest(
 				errorMessage = error.message;
 			}
 
+			// Create a detailed error message that includes debug info
+			const detailedErrorMessage = `Bento API Error (${statusCode}): ${errorMessage}
+
+DEBUG INFORMATION:
+- URL: ${fullUrl}
+- Endpoint: ${endpoint}
+- Method: ${method}
+- Has Credentials: ${!!credentials}
+- Has Publishable Key: ${!!pubKey} (length: ${pubKey.length})
+- Has Secret Key: ${!!secKey} (length: ${secKey.length})
+- Has Site UUID: ${!!uuid} (length: ${uuid.length})
+- Site UUID Preview: ${uuid ? `${uuid.substring(0, 8)}...${uuid.substring(uuid.length - 4)}` : 'N/A'}
+- Original Error: ${error.message}`;
+
 			throw new NodeOperationError(
 				this.getNode(),
-				`Bento API Error (${statusCode}): ${errorMessage}`,
+				detailedErrorMessage,
 				{
 					itemIndex,
 					description: error.response?.body ? JSON.stringify(error.response.body) : undefined,
