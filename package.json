@@ -1,5 +1,5 @@
 {
-  "name": "n8n-nodes-bento",
+  "name": "bento-n8n-sdk",
   "version": "0.1.0",
   "description": "n8n community node for Bento integration",
   "keywords": [
@@ -9,15 +9,18 @@
     "marketing"
   ],
   "license": "MIT",
-  "homepage": "https://github.com/zero/bento-n8n-sdk",
   "author": {
     "name": "Bento Team",
     "email": "support@bentonow.com"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/zero/bento-n8n-sdk.git"
+    "url": "git://github.com/bentonow/bento-n8n-sdk.git"
   },
+  "bugs": {
+    "url": "https://github.com/bentonow/bento-n8n-sdk/issues"
+  },
+  "homepage": "https://bentonow.com",
   "engines": {
     "node": ">=20.15"
   },
@@ -31,7 +34,8 @@
     "prepublishOnly": "npm run build && npm run lint -c .eslintrc.prepublish.js nodes credentials package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "bento.svg"
   ],
   "n8n": {
     "n8nNodesApiVersion": 1,

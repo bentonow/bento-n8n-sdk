@@ -83,50 +83,50 @@ function isValidEmail(email: string): boolean {
 	if (typeof email !== 'string' || email.trim() === '') {
 		return false;
 	}
-	
+
 	// Trim the email
 	const trimmedEmail = email.trim();
-	
+
 	// Check length (RFC 5321 standard)
 	if (trimmedEmail.length > 254) {
 		return false;
 	}
-	
+
 	// Check for basic format using enhanced regex
 	if (!EMAIL_REGEX.test(trimmedEmail)) {
 		return false;
 	}
-	
+
 	// Additional security checks
 	// Prevent emails with consecutive dots
 	if (trimmedEmail.includes('..')) {
 		return false;
 	}
-	
+
 	// Prevent emails starting or ending with dots
 	if (trimmedEmail.startsWith('.') || trimmedEmail.endsWith('.')) {
 		return false;
 	}
-	
+
 	// Split and validate local and domain parts
 	const [localPart, domainPart] = trimmedEmail.split('@');
-	
+
 	// Local part validation (before @)
 	if (localPart.length > 64) { // RFC 5321 limit
 		return false;
 	}
-	
+
 	// Domain part validation (after @)
 	if (domainPart.length > 253) { // RFC 5321 limit
 		return false;
 	}
-	
+
 	// Check for valid domain structure
 	const domainParts = domainPart.split('.');
 	if (domainParts.length < 2) {
 		return false;
 	}
-	
+
 	// Each domain part should be valid
 	for (const part of domainParts) {
 		if (part.length === 0 || part.length > 63) {
@@ -137,7 +137,7 @@ function isValidEmail(email: string): boolean {
 			return false;
 		}
 	}
-	
+
 	return true;
 }
 
@@ -162,14 +162,14 @@ function validateHtmlContent(html: string): boolean {
 	if (typeof html !== 'string') {
 		return false;
 	}
-	
+
 	// Check for dangerous patterns
 	for (const pattern of DANGEROUS_HTML_PATTERNS) {
 		if (pattern.test(html)) {
 			return false;
 		}
 	}
-	
+
 	return true;
 }
 
@@ -182,19 +182,19 @@ function sanitizeHtmlContent(html: string): string {
 	if (typeof html !== 'string') {
 		return '';
 	}
-	
+
 	let sanitized = html.trim();
-	
+
 	// Remove dangerous patterns
 	for (const pattern of DANGEROUS_HTML_PATTERNS) {
 		sanitized = sanitized.replace(pattern, '');
 	}
-	
+
 	// Remove any remaining script content that might have been obfuscated
 	sanitized = sanitized.replace(/javascript\s*:/gi, '');
 	sanitized = sanitized.replace(/vbscript\s*:/gi, '');
 	sanitized = sanitized.replace(/data\s*:/gi, '');
-	
+
 	return sanitized;
 }
 
@@ -205,45 +205,45 @@ function sanitizeHtmlContent(html: string): string {
  */
 function validateHtmlStructure(html: string): { isValid: boolean; issues: string[] } {
 	const issues: string[] = [];
-	
+
 	if (typeof html !== 'string') {
 		issues.push('HTML content must be a string');
 		return { isValid: false, issues };
 	}
-	
+
 	// Check for dangerous patterns and collect specific issues
 	if (/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi.test(html)) {
 		issues.push('Script tags are not allowed');
 	}
-	
+
 	if (/javascript:/gi.test(html)) {
 		issues.push('JavaScript URLs are not allowed');
 	}
-	
+
 	if (/on\w+\s*=/gi.test(html)) {
 		issues.push('Event handlers (onclick, onload, etc.) are not allowed');
 	}
-	
+
 	if (/<iframe\b[^>]*>/gi.test(html)) {
 		issues.push('Iframe tags are not allowed');
 	}
-	
+
 	if (/<form\b[^>]*>/gi.test(html)) {
 		issues.push('Form tags are not allowed in email content');
 	}
-	
+
 	if (/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi.test(html)) {
 		issues.push('Style tags are not recommended (use inline styles instead)');
 	}
-	
+
 	// Check for unclosed tags (basic validation)
 	const openTags = html.match(/<[^\/][^>]*>/g) || [];
 	const closeTags = html.match(/<\/[^>]*>/g) || [];
-	
+
 	if (openTags.length !== closeTags.length) {
 		issues.push('HTML may contain unclosed tags');
 	}
-	
+
 	return {
 		isValid: issues.length === 0,
 		issues
@@ -302,16 +302,16 @@ function createSecureErrorMessage(error: any, operation: string): string {
 				return SECURE_ERROR_MESSAGES.API_ERROR;
 		}
 	}
-	
+
 	// Handle network and other errors
 	if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
 		return SECURE_ERROR_MESSAGES.NETWORK_ERROR;
 	}
-	
+
 	if (error.message && error.message.includes('validation')) {
 		return SECURE_ERROR_MESSAGES.VALIDATION_ERROR;
 	}
-	
+
 	return SECURE_ERROR_MESSAGES.UNKNOWN_ERROR;
 }
 
@@ -347,7 +347,7 @@ function logSecureError(
  */
 function validatePayloadSize(body: any): boolean {
 	if (!body) return true;
-	
+
 	const payloadSize = JSON.stringify(body).length;
 	return payloadSize <= REQUEST_LIMITS.MAX_PAYLOAD_SIZE;
 }
@@ -376,17 +376,17 @@ function shouldRetryRequest(error: any, attempt: number): boolean {
 	if (attempt >= REQUEST_LIMITS.MAX_RETRIES) {
 		return false;
 	}
-	
+
 	// Retry on specific HTTP status codes
 	if (error.statusCode && RETRYABLE_STATUS_CODES.includes(error.statusCode)) {
 		return true;
 	}
-	
+
 	// Retry on specific network error codes
 	if (error.code && RETRYABLE_ERROR_CODES.includes(error.code)) {
 		return true;
 	}
-	
+
 	return false;
 }
 
@@ -409,7 +409,7 @@ const requestQueue = new Map<string, Array<() => void>>();
  */
 async function acquireRequestSlot(nodeId: string): Promise<void> {
 	const currentRequests = activeRequests.get(nodeId) || 0;
-	
+
 	if (currentRequests >= REQUEST_LIMITS.MAX_CONCURRENT_REQUESTS) {
 		// Wait for an existing request to complete
 		const queue = requestQueue.get(nodeId) || [];
@@ -418,7 +418,7 @@ async function acquireRequestSlot(nodeId: string): Promise<void> {
 			requestQueue.set(nodeId, queue);
 		});
 	}
-	
+
 	activeRequests.set(nodeId, currentRequests + 1);
 }
 
@@ -430,7 +430,7 @@ function releaseRequestSlot(nodeId: string): void {
 	const currentRequests = activeRequests.get(nodeId) || 0;
 	const newCount = Math.max(0, currentRequests - 1);
 	activeRequests.set(nodeId, newCount);
-	
+
 	// Process queue if there are waiting requests
 	const queue = requestQueue.get(nodeId) || [];
 	if (queue.length > 0 && newCount < REQUEST_LIMITS.MAX_CONCURRENT_REQUESTS) {
@@ -447,7 +447,7 @@ export class Bento implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Bento',
 		name: 'bento',
-		icon: 'fa:envelope',
+		icon: 'file:bento.svg',
 		group: ['communication'],
 		version: 1,
 		subtitle: '={{$parameter["operation"]}}',
@@ -1070,7 +1070,7 @@ export class Bento implements INodeType {
 							};
 						} catch (error) {
 							logSecureError.call(this, error, 'createSubscriber', { itemIndex: i });
-							
+
 							responseData = {
 								operation: 'createSubscriber',
 								success: false,
@@ -1125,7 +1125,7 @@ export class Bento implements INodeType {
 							};
 						} catch (error) {
 							logSecureError.call(this, error, 'getSubscriber', { itemIndex: i });
-							
+
 							responseData = {
 								operation: 'getSubscriber',
 								success: false,
@@ -1207,7 +1207,7 @@ export class Bento implements INodeType {
 							};
 						} catch (error) {
 							logSecureError.call(this, error, 'updateSubscriber', { itemIndex: i });
-							
+
 							responseData = {
 								operation: 'updateSubscriber',
 								success: false,
@@ -1284,7 +1284,7 @@ export class Bento implements INodeType {
 							};
 						} catch (error) {
 							logSecureError.call(this, error, 'trackEvent', { itemIndex: i });
-							
+
 							responseData = {
 								operation: 'trackEvent',
 								success: false,
@@ -1317,7 +1317,7 @@ export class Bento implements INodeType {
 						let textBody = '';
 						if (emailType === 'html') {
 							htmlBody = this.getNodeParameter('htmlBody', i) as string;
-							
+
 							// Validate and sanitize HTML content
 							if (htmlBody) {
 								const htmlValidation = validateHtmlStructure(htmlBody);
@@ -1328,7 +1328,7 @@ export class Bento implements INodeType {
 										{ itemIndex: i }
 									);
 								}
-								
+
 								// Sanitize the HTML content
 								htmlBody = sanitizeHtmlContent(htmlBody);
 							}
@@ -1460,7 +1460,7 @@ export class Bento implements INodeType {
 							};
 						} catch (error) {
 							logSecureError.call(this, error, 'sendTransactionalEmail', { itemIndex: i });
-							
+
 							responseData = {
 								operation: 'sendTransactionalEmail',
 								success: false,
@@ -1607,7 +1607,7 @@ export class Bento implements INodeType {
 							};
 						} catch (error) {
 							logSecureError.call(this, error, 'subscriberCommand', { itemIndex: i });
-							
+
 							responseData = {
 								operation: 'subscriberCommand',
 								success: false,
@@ -1646,11 +1646,11 @@ export class Bento implements INodeType {
 						// Build query parameters for the validation endpoint
 						const queryParams = new URLSearchParams();
 						queryParams.append('email', email);
-						
+
 						if (name) {
 							queryParams.append('name', name);
 						}
-						
+
 						if (ip) {
 							queryParams.append('ip', ip);
 						}
@@ -1677,7 +1677,7 @@ export class Bento implements INodeType {
 							};
 						} catch (error) {
 							logSecureError.call(this, error, 'validateEmail', { itemIndex: i });
-							
+
 							responseData = {
 								operation: 'validateEmail',
 								success: false,
@@ -1728,7 +1728,7 @@ async function makeBentoRequest(
 	): Promise<any> {
 		// Generate unique node ID for request tracking
 		const nodeId = `${this.getNode().id}-${this.getInstanceId()}`;
-		
+
 		// Validate payload size before processing
 		if (body && !validatePayloadSize(body)) {
 			throw new NodeOperationError(
@@ -1737,7 +1737,7 @@ async function makeBentoRequest(
 				{ itemIndex }
 			);
 		}
-		
+
 		// Get and validate credentials
 		const credentials = await this.getCredentials('bentoApi');
 		if (!credentials) {
@@ -1747,20 +1747,20 @@ async function makeBentoRequest(
 		}
 
 		const { publishableKey, secretKey, siteUuid } = credentials;
-		
+
 		// Validate all required credentials are present and non-empty
 		if (!publishableKey || typeof publishableKey !== 'string' || publishableKey.trim() === '') {
 			throw new NodeOperationError(this.getNode(), 'Missing or invalid publishableKey in credentials', {
 				itemIndex,
 			});
 		}
-		
+
 		if (!secretKey || typeof secretKey !== 'string' || secretKey.trim() === '') {
 			throw new NodeOperationError(this.getNode(), 'Missing or invalid secretKey in credentials', {
 				itemIndex,
 			});
 		}
-		
+
 		if (!siteUuid || typeof siteUuid !== 'string' || siteUuid.trim() === '') {
 			throw new NodeOperationError(this.getNode(), 'Missing or invalid siteUuid in credentials', {
 				itemIndex,
@@ -1777,14 +1777,14 @@ async function makeBentoRequest(
 
 		// Build the full URL with site_uuid parameter
 		const baseUrl = 'https://app.bentonow.com';
-		
+
 		// Validate and encode the site_uuid
 		if (!uuid || typeof uuid !== 'string' || uuid.trim() === '') {
 			throw new NodeOperationError(this.getNode(), 'Invalid site_uuid in credentials - must be a non-empty string', {
 				itemIndex,
 			});
 		}
-		
+
 		const encodedUuid = encodeURIComponent(uuid.trim());
 		const separator = endpoint.includes('?') ? '&' : '?';
 		const fullUrl = `${baseUrl}${endpoint}${separator}site_uuid=${encodedUuid}`;
@@ -1798,7 +1798,7 @@ async function makeBentoRequest(
 				itemIndex,
 				endpoint
 			});
-			
+
 			throw new NodeOperationError(
 				this.getNode(),
 				SECURE_ERROR_MESSAGES.INVALID_REQUEST,
@@ -1812,7 +1812,7 @@ async function makeBentoRequest(
 		await acquireRequestSlot(nodeId);
 
 		let lastError: any;
-		
+
 		try {
 			// Retry logic with exponential backoff
 			for (let attempt = 0; attempt <= REQUEST_LIMITS.MAX_RETRIES; attempt++) {
@@ -1836,50 +1836,50 @@ async function makeBentoRequest(
 					}
 
 					const response = await this.helpers.httpRequest(options);
-					
+
 					// Request successful, release slot and return
 					releaseRequestSlot(nodeId);
 					return response;
 
 				} catch (error: any) {
 					lastError = error;
-					
+
 					// Handle rate limiting specifically
 					if (error.statusCode === 429) {
 						const retryAfter = error.headers?.['retry-after'];
 						const delay = retryAfter ? parseInt(retryAfter) * 1000 : REQUEST_LIMITS.RATE_LIMIT_DELAY;
-						
+
 						if (attempt < REQUEST_LIMITS.MAX_RETRIES) {
 							await sleep(delay);
 							continue;
 						}
 					}
-					
+
 					// Check if we should retry this error
 					if (shouldRetryRequest(error, attempt)) {
 						const delay = calculateBackoffDelay(attempt);
 						await sleep(delay);
 						continue;
 					}
-					
+
 					// Error is not retryable or we've exceeded max attempts
 					break;
 				}
 			}
-			
+
 			// All retries exhausted, throw the last error
 			throw lastError;
-			
+
 		} catch (error: any) {
 			// Log the error securely for debugging
 			logSecureError.call(this, error, 'API Request', {
 				itemIndex,
 				endpoint
 			});
-			
+
 			// Create a secure error message
 			const secureMessage = createSecureErrorMessage(error, 'API Request');
-			
+
 			// Create error with minimal information exposure
 			const nodeError = new NodeOperationError(
 				this.getNode(),
@@ -1889,7 +1889,7 @@ async function makeBentoRequest(
 					description: `Failed to communicate with Bento API. Status: ${error.statusCode || 'Unknown'}`,
 				}
 			);
-			
+
 			throw nodeError;
 		} finally {
 			// Always release the request slot
