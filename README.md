@@ -9,7 +9,7 @@ The Bento n8n Community Node makes it quick and easy to integrate Bento's powerf
 Get started with our [📚 integration guides](https://docs.bentonow.com), or [📘 browse the API reference](https://docs.bentonow.com/subscribers).
 
 
-[![npm version](https://badge.fury.io/js/n8n-nodes-bento.svg)](https://badge.fury.io/js/n8n-nodes-bento)
+[![npm version](https://badge.fury.io/js/bento-n8n-sdk.svg)](https://badge.fury.io/js/bento-n8n-sdk)
 
 Table of contents
 =================
@@ -51,7 +51,7 @@ Table of contents
 1. Open your n8n instance
 2. Go to **Settings** → **Community Nodes**
 3. Click **Install a community node**
-4. Enter the package name: `n8n-nodes-bento`
+4. Enter the package name: `bento-n8n-sdk`
 5. Click **Install**
 
 #### Option 2: Install via npm (Self-hosted)
@@ -63,7 +63,7 @@ If you're running n8n locally or in a self-hosted environment:
 cd ~/.n8n
 
 # Install the Bento community node
-npm install n8n-nodes-bento
+npm install bento-n8n-sdk
 
 # Restart n8n
 n8n start
@@ -78,7 +78,7 @@ For Docker installations, add the package to your n8n container:
 FROM n8nio/n8n:latest
 
 USER root
-RUN npm install -g n8n-nodes-bento
+RUN npm install -g bento-n8n-sdk
 USER node
 ```
 
@@ -90,7 +90,7 @@ services:
   n8n:
     image: n8nio/n8n:latest
     environment:
-      - N8N_NODES_INCLUDE=n8n-nodes-bento
+      - N8N_NODES_INCLUDE=bento-n8n-sdk
 ```
 
 ### Configuration
@@ -316,7 +316,7 @@ We welcome contributions! Please see our [contributing guidelines](CODE_OF_CONDU
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-org/bento-n8n-sdk.git
+   git clone https://github.com/bentonow/bento-n8n-sdk.git
    cd bento-n8n-sdk
    ```
 
@@ -339,7 +339,7 @@ We welcome contributions! Please see our [contributing guidelines](CODE_OF_CONDU
    ```bash
    npm link
    cd ~/.n8n
-   npm link n8n-nodes-bento
+   npm link bento-n8n-sdk
    ```
 
 ## License

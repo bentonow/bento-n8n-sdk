@@ -454,7 +454,6 @@ export class Bento implements INodeType {
 		description: 'Native integration for Bento API actions',
 		defaults: {
 			name: 'Bento',
-			color: '#FF6B35',
 		},
 		inputs: [NodeConnectionType.Main],
 		outputs: [NodeConnectionType.Main],
