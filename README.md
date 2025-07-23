@@ -51,7 +51,7 @@ Table of contents
 1. Open your n8n instance
 2. Go to **Settings** → **Community Nodes**
 3. Click **Install a community node**
-4. Enter the package name: `n8n-nodes-bento`
+4. Enter the package name: `bento-n8n-sdk`
 5. Click **Install**
 
 #### Option 2: Install via npm (Self-hosted)
@@ -63,7 +63,7 @@ If you're running n8n locally or in a self-hosted environment:
 cd ~/.n8n
 
 # Install the Bento community node
-npm install n8n-nodes-bento
+npm install bento-n8n-sdk
 
 # Restart n8n
 n8n start
