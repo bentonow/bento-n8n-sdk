@@ -268,7 +268,6 @@ class Bento {
             description: 'Native integration for Bento API actions',
             defaults: {
                 name: 'Bento',
-                color: '#FF6B35',
             },
             inputs: ["main"],
             outputs: ["main"],
@@ -1415,7 +1414,7 @@ async function makeBentoRequest(method, endpoint, body, itemIndex = 0) {
                         Authorization: authHeader,
                         'Content-Type': 'application/json',
                         Accept: 'application/json',
-                        'User-Agent': 'n8n-bento-node/1.0.0',
+                        'User-Agent': 'bento-n8n-' + uuid,
                     },
                     json: true,
                     timeout: REQUEST_LIMITS.DEFAULT_TIMEOUT,

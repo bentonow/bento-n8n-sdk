@@ -46,15 +46,8 @@ Table of contents
 
 ### Installation
 
-#### Option 1: Install via n8n Community Nodes (Recommended)
 
-1. Open your n8n instance
-2. Go to **Settings** → **Community Nodes**
-3. Click **Install a community node**
-4. Enter the package name: `bento-n8n-sdk`
-5. Click **Install**
-
-#### Option 2: Install via npm (Self-hosted)
+#### Option 1: Install via npm (Self-hosted)
 
 If you're running n8n locally or in a self-hosted environment:
 
@@ -65,32 +58,32 @@ cd ~/.n8n
 # Install the Bento community node
 npm install bento-n8n-sdk
 
+# make sure you symlink the node to the n8n installation directory
+ln -s {Path to bento node install}/bento-n8n-sdk {n8n installation directory}/custom/nodes/bento-n8n-sdk
+
 # Restart n8n
 n8n start
 ```
 
-#### Option 3: Docker Installation
+#### Option 2: Docker Installation (Recommended)
 
-For Docker installations, add the package to your n8n container:
+For Docker installations we suggest to download the node from github and mountain it as a volume in the container, this typically eliminates install issues inside the container. You can also npm install the pckage and then mount that location in the container as well.
 
-```dockerfile
-# In your Dockerfile or docker-compose.yml
-FROM n8nio/n8n:latest
-
-USER root
-RUN npm install -g bento-n8n-sdk
-USER node
-```
-
-Or using environment variables in docker-compose.yml:
+Here is an example docker-compose.yml file:
 
 ```yaml
-version: '3.8'
 services:
-  n8n:
-    image: n8nio/n8n:latest
-    environment:
-      - N8N_NODES_INCLUDE=bento-n8n-sdk
+	n8n:
+		image: n8nio/n8n
+		ports:
+			- 5678:5678
+		volumes:
+			- ./n8n:/home/node/.n8n # data persistence for n8n
+			- ../bento-n8n-sdk:/home/node/.n8n/custom/nodes/bento-n8n-sdk # bento node relative to docker-compose.yml
+		environment:
+			- N8N_CUSTOM_EXTENSIONS=/home/node/.n8n/custom/nodes
+			- N8N_EDITOR_BASE_URL=http://localhost:5678
+			- GENERIC_TIMEZONE=Asia/Tokyo
 ```
 
 ### Configuration
