@@ -73,26 +73,26 @@ Here is an example docker-compose.yml file:
 
 ```yaml
 services:
-	n8n:
-		image: n8nio/n8n:latest
-		container_name: n8n
-		restart: unless-stopped
-		ports:
-			- "5678:5678"
-		volumes:
-			- ./n8n:/home/node/.n8n
-		environment:
-			- N8N_CUSTOM_EXTENSIONS=/home/node/.n8n/custom/nodes
-			- N8N_EDITOR_BASE_URL=http://localhost:5678
-			- GENERIC_TIMEZONE=Asia/Tokyo
-		entrypoint: ["/bin/sh", "-c"]
-		command: |
-			"set -e
-			 cd /home/node/.n8n
-			 mkdir -p custom/nodes
-			 npm install bento-n8n-sdk
-			 ln -sfn /home/node/.n8n/node_modules/bento-n8n-sdk /home/node/.n8n/custom/nodes/bento-n8n-sdk
-			 exec n8n start"
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    volumes:
+      - ./n8n:/home/node/.n8n
+    environment:
+      - N8N_CUSTOM_EXTENSIONS=/home/node/.n8n/custom/nodes
+      - N8N_EDITOR_BASE_URL=http://localhost:5678
+      - GENERIC_TIMEZONE=Asia/Tokyo
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      "set -e
+       cd /home/node/.n8n
+       mkdir -p custom/nodes
+       npm install bento-n8n-sdk
+       ln -sfn /home/node/.n8n/node_modules/bento-n8n-sdk /home/node/.n8n/custom/nodes/bento-n8n-sdk
+       exec n8n start"
 ```
 
 ### Configuration
