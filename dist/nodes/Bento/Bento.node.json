@@ -1,24 +1,24 @@
 {
-    "node": "bento-n8n-sdk.bento",
-    "nodeVersion": "1.0",
-    "codexVersion": "1.0",
-    "categories": ["Marketing", "Email", "Communication"],
-    "resources": {
-        "credentialDocumentation": [
-            {
-                "url": "https://docs.bentonow.com/authentication"
-            }
-        ],
-        "primaryDocumentation": [
-            {
-                "url": "https://docs.bentonow.com/"
-            }
-        ]
-    },
-    "alias": ["Email Marketing", "Transactional Email", "Subscriber Management"],
-    "subcategories": {
-        "Marketing": ["Email Marketing", "Customer Engagement"],
-        "Email": ["Transactional", "Marketing Automation"],
-        "Communication": ["Customer Communication", "Notifications"]
-    }
+	"node": "n8n-nodes-bento.bento",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Marketing", "Email", "Communication"],
+	"resources": {
+		"credentialDocumentation": [
+			{
+				"url": "https://docs.bentonow.com/authentication"
+			}
+		],
+		"primaryDocumentation": [
+			{
+				"url": "https://docs.bentonow.com/"
+			}
+		]
+	},
+	"alias": ["Email Marketing", "Transactional Email", "Subscriber Management"],
+	"subcategories": {
+		"Marketing": ["Email Marketing", "Customer Engagement"],
+		"Email": ["Transactional", "Marketing Automation"],
+		"Communication": ["Customer Communication", "Notifications"]
+	}
 }
