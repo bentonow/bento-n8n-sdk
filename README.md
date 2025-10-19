@@ -9,7 +9,7 @@ The Bento n8n Community Node makes it quick and easy to integrate Bento's powerf
 Get started with our [📚 integration guides](https://docs.bentonow.com), or [📘 browse the API reference](https://docs.bentonow.com/subscribers).
 
 
-[![npm version](https://badge.fury.io/js/bento-n8n-sdk.svg)](https://badge.fury.io/js/bento-n8n-sdk)
+[![npm version](https://badge.fury.io/js/n8n-nodes-bento.svg)](https://badge.fury.io/js/n8n-nodes-bento)
 
 Table of contents
 =================
@@ -56,10 +56,10 @@ If you're running n8n locally or in a self-hosted environment:
 cd ~/.n8n
 
 # Install the Bento community node
-npm install bento-n8n-sdk
+npm install n8n-nodes-bento
 
 # make sure you symlink the node to the n8n installation directory
-ln -s {Path to bento node install}/bento-n8n-sdk {n8n installation directory}/custom/nodes/bento-n8n-sdk
+ln -s {Path to bento node install}/n8n-nodes-bento {n8n installation directory}/custom/nodes/n8n-nodes-bento
 
 # Restart n8n
 n8n start
@@ -73,6 +73,49 @@ Here is an example docker-compose.yml file:
 
 ```yaml
 services:
+<<<<<<< ours
+	n8n:
+		image: n8nio/n8n:latest
+		container_name: n8n
+		restart: unless-stopped
+		ports:
+			- "5678:5678"
+		volumes:
+			- ./n8n:/home/node/.n8n
+		environment:
+			- N8N_CUSTOM_EXTENSIONS=/home/node/.n8n/custom/nodes
+			- N8N_EDITOR_BASE_URL=http://localhost:5678
+			- GENERIC_TIMEZONE=Asia/Tokyo
+		entrypoint: ["/bin/sh", "-c"]
+		command: |
+			"set -e
+			 cd /home/node/.n8n
+			 mkdir -p custom/nodes
+			 npm install n8n-nodes-bento
+			 ln -sfn /home/node/.n8n/node_modules/n8n-nodes-bento /home/node/.n8n/custom/nodes/n8n-nodes-bento
+			 exec n8n start"
+||||||| ancestor
+	n8n:
+		image: n8nio/n8n:latest
+		container_name: n8n
+		restart: unless-stopped
+		ports:
+			- "5678:5678"
+		volumes:
+			- ./n8n:/home/node/.n8n
+		environment:
+			- N8N_CUSTOM_EXTENSIONS=/home/node/.n8n/custom/nodes
+			- N8N_EDITOR_BASE_URL=http://localhost:5678
+			- GENERIC_TIMEZONE=Asia/Tokyo
+		entrypoint: ["/bin/sh", "-c"]
+		command: |
+			"set -e
+			 cd /home/node/.n8n
+			 mkdir -p custom/nodes
+			 npm install bento-n8n-sdk
+			 ln -sfn /home/node/.n8n/node_modules/bento-n8n-sdk /home/node/.n8n/custom/nodes/bento-n8n-sdk
+			 exec n8n start"
+=======
   n8n:
     image: n8nio/n8n:latest
     container_name: n8n
@@ -93,6 +136,7 @@ services:
        npm install bento-n8n-sdk
        ln -sfn /home/node/.n8n/node_modules/bento-n8n-sdk /home/node/.n8n/custom/nodes/bento-n8n-sdk
        exec n8n start"
+>>>>>>> theirs
 ```
 
 ### Configuration
@@ -341,7 +385,7 @@ We welcome contributions! Please see our [contributing guidelines](CODE_OF_CONDU
    ```bash
    npm link
    cd ~/.n8n
-   npm link bento-n8n-sdk
+   npm link n8n-nodes-bento
    ```
 
 ## License
