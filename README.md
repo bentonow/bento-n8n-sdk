@@ -256,16 +256,15 @@ Validate email addresses for spam/throwaway detection using Bento's validation s
 
 ### Blacklist Check
 
-Evaluate whether an email address appears on Bento's blacklist service.
+Query Bento’s experimental blacklist service for a domain and optional IP address.
 
 **Required Parameters:**
 
-- **Email**: The email address to evaluate
+- **Domain**: The domain to evaluate (for example `test.com`)
 
 **Optional Parameters:**
 
-- **First Name / Last Name**: Supplementary profile data to improve match confidence
-- **IP Address**: Associated IP address for additional scoring context
+- **IP Address**: Provide when you want to evaluate a specific client IP alongside the domain
 
 **Returns:**
 
@@ -273,9 +272,9 @@ Evaluate whether an email address appears on Bento's blacklist service.
 
 **Example Use Cases:**
 
-- Prevent sending to high-risk or known abusive addresses
-- Screen manual imports before adding to automations
-- Review lead sources for potential fraud signals
+- Screen incoming leads or signup forms by their sending domain
+- Enforce allow/deny rules in automations before triggering downstream actions
+- Investigate suspicious traffic by cross-referencing domain activity with IP reputation
 
 ### Content Moderation
 
@@ -305,11 +304,12 @@ Predict the likely gender associated with a subscriber using Bento's experimenta
 
 **Required Parameters:**
 
-- At least one of **Email**, **First Name**, or **Last Name**
+- Provide at least one of **First Name** or **Last Name** (their combination is sent as the required `name` field)
 
 **Optional Parameters:**
 
-- Provide combinations of email and names to increase prediction accuracy
+- **Email** (improves accuracy when combined with the name)
+- Supplying both first and last names produces the most complete `name` payload
 
 **Returns:**
 
@@ -345,16 +345,11 @@ Retrieve geolocation metadata for a subscriber's IP address.
 
 ### Site Metrics
 
-Pull site-wide performance metrics across a configurable date range.
+Fetch Bento’s top-level site metrics with a single API call.
 
 **Required Parameters:**
 
-- **Date Range**: Choose from Last 7 Days, Last 30 Days, or a custom window
-
-**Optional Parameters:**
-
-- **Start/End Date**: Only when using the Custom range
-- **Include Inactive Subscribers**: Toggle to include unsubscribed or inactive contacts
+- None – your Bento credentials (including `site_uuid`) scope the request
 
 **Returns:**
 
@@ -362,9 +357,9 @@ Pull site-wide performance metrics across a configurable date range.
 
 **Example Use Cases:**
 
-- Monitor high-level list growth week over week
-- Compare subscriber activity across monthly windows
-- Share snapshot summaries with stakeholders
+- Monitor list growth from dashboards or health checks
+- Provide executives with a quick snapshot of site-wide performance
+- Automate daily or weekly rollups without manual filtering
 
 ### Segment Metrics
 
@@ -373,11 +368,6 @@ Measure engagement for a specific Bento segment.
 **Required Parameters:**
 
 - **Segment ID**: Identifier of the segment to analyze
-- **Date Range**: Choose a preset or custom window
-
-**Optional Parameters:**
-
-- **Start/End Date**: Only required when using a custom range
 
 **Returns:**
 
@@ -391,13 +381,11 @@ Measure engagement for a specific Bento segment.
 
 ### Report Metrics
 
-Collect high-level reports for broadcasts, automations, or revenue.
+Collect high-level report metrics using Bento's unified report endpoint.
 
 **Required Parameters:**
 
-- **Report Type**: Select Broadcast, Automation, or Revenue
-- **Broadcast/Automation ID**: Required when the corresponding type is selected
-- **Date Range**: Choose from presets or supply a custom window
+- **Report ID**: The `report_id` returned by Bento when generating a report
 
 **Returns:**
 
@@ -405,9 +393,9 @@ Collect high-level reports for broadcasts, automations, or revenue.
 
 **Example Use Cases:**
 
-- Summarize broadcast performance for stakeholders
-- Track automation effectiveness over specific windows
-- Monitor revenue generated from email activity
+- Summarize the results of a generated report for stakeholders
+- Refresh dashboards that rely on Bento’s report API
+- Monitor revenue and engagement contained in saved Bento reports
 
 ### List Broadcasts
 
@@ -431,32 +419,36 @@ Retrieve Bento broadcasts with optional filtering.
 
 ### Send Broadcast
 
-Queue a draft broadcast for immediate or scheduled delivery.
+Submit a broadcast batch to Bento’s `/batch/broadcasts` endpoint.
 
 > [!WARNING]
 > This action requires enabling **Confirm Send** to avoid accidental sends. Failing to confirm will block execution.
 
 **Required Parameters:**
 
-- **Broadcast ID**: Identifier of the draft broadcast
-- **Audience**: All subscribers, a segment, or specific tags
-- **Send Timing**: Immediate or scheduled
+- **Campaign Name**: Identifier for the broadcast
+- **Subject**: Email subject line
+- **Content**: Campaign body (plain text or HTML)
+- **Content Type**: Chooses how Bento renders the content
+- **From Email/Name**: Sender identity displayed to recipients
+- **Confirm Send**: Must be enabled to submit the batch
 
 **Optional Parameters:**
 
-- **Subject Override**: Replace the stored subject line
-- **Segment/Tag IDs**: Provide when targeting a subset
-- **Scheduled Send Time**: Required when using scheduled timing
+- **Approved**: Flag the campaign as approved for sending
+- **Inclusive/Exclusive Tags**: Comma-separated tag filters
+- **Segment ID**: Restrict delivery to a specific segment
+- **Batch Size Per Hour**: Limit hourly send volume (defaults to Bento’s setting)
 
 **Returns:**
 
-- API response payload including any partial failure errors surfaced by Bento
+- Bento’s API response, including any broadcast objects returned or validation errors
 
 **Example Use Cases:**
 
-- Schedule a broadcast directly from an automation workflow
-- Target broadcasts to high-value segments or tagged cohorts
-- Trigger emergency messages while enforcing a confirmation gate
+- Launch ad-hoc campaigns from n8n using Bento’s batch API
+- Enforce hour-based throttling for large broadcasts
+- Target subsets of the audience with inclusive/exclusive tag filters while keeping workflows code-free
 
 ## Things to Know
 
