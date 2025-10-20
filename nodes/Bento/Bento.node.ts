@@ -25,6 +25,8 @@ const INPUT_LIMITS = {
 	USER_ID: 254,         // User IDs (typically emails)
 	IP_ADDRESS: 45,       // IPv6 max length
 	VALIDATE_NAME: 100,   // Name for validation
+	USER_AGENT: 512,      // User-Agent header length allowance
+	SEGMENT_ID: 100,      // Segment identifier length
 } as const;
 
 // HTML validation patterns
@@ -165,7 +167,8 @@ function validateHtmlContent(html: string): boolean {
 
 	// Check for dangerous patterns
 	for (const pattern of DANGEROUS_HTML_PATTERNS) {
-		if (pattern.test(html)) {
+		const regex = new RegExp(pattern.source, pattern.flags);
+		if (regex.test(html)) {
 			return false;
 		}
 	}
@@ -187,7 +190,8 @@ function sanitizeHtmlContent(html: string): string {
 
 	// Remove dangerous patterns
 	for (const pattern of DANGEROUS_HTML_PATTERNS) {
-		sanitized = sanitized.replace(pattern, '');
+		const regex = new RegExp(pattern.source, pattern.flags);
+		sanitized = sanitized.replace(regex, '');
 	}
 
 	// Remove any remaining script content that might have been obfuscated
@@ -444,6 +448,12 @@ function releaseRequestSlot(nodeId: string): void {
 }
 
 export class Bento implements INodeType {
+	ai = true;
+	aiCategory = 'automation';
+	supportsStreaming = false;
+	inputType = 'json';
+	outputType = 'json';
+
 	description: INodeTypeDescription = {
 		displayName: 'Bento',
 		name: 'bento',
@@ -471,10 +481,34 @@ export class Bento implements INodeType {
 				noDataExpression: true,
 				options: [
 					{
+						name: 'Blacklist Check',
+						value: 'blacklistCheck',
+						description: 'Check an email against Bento\'s blacklist service',
+						action: 'Check email against blacklist',
+					},
+					{
+						name: 'Content Moderation',
+						value: 'contentModeration',
+						description: 'Send content to Bento\'s moderation service',
+						action: 'Moderate content',
+					},
+					{
 						name: 'Create Subscriber',
 						value: 'createSubscriber',
 						description: 'Add a new subscriber to your Bento audience with email and profile data',
 						action: 'Create a subscriber',
+					},
+					{
+						name: 'Gender Guess',
+						value: 'genderGuess',
+						description: 'Predict subscriber gender using Bento\'s experimental classifier',
+						action: 'Guess gender',
+					},
+					{
+						name: 'Geolocation Lookup',
+						value: 'geolocationLookup',
+						description: 'Look up location details for an IP address',
+						action: 'Look up geolocation',
 					},
 					{
 						name: 'Get Subscriber',
@@ -483,10 +517,40 @@ export class Bento implements INodeType {
 						action: 'Get a subscriber',
 					},
 					{
+						name: 'List Broadcasts',
+						value: 'listBroadcasts',
+						description: 'List Bento broadcasts with optional filters',
+						action: 'List broadcasts',
+					},
+					{
+						name: 'Report Metrics',
+						value: 'reportStats',
+						description: 'Pull Bento analytics reports for broadcasts, automations, or revenue',
+						action: 'Fetch report metrics',
+					},
+					{
+						name: 'Segment Metrics',
+						value: 'segmentStats',
+						description: 'Fetch segment-level analytics for a selected date range',
+						action: 'Fetch segment metrics',
+					},
+					{
+						name: 'Send Broadcast',
+						value: 'sendBroadcast',
+						description: 'Send a broadcast immediately or at a scheduled time',
+						action: 'Send a broadcast',
+					},
+					{
 						name: 'Send Transactional Email',
 						value: 'sendTransactionalEmail',
 						description: 'Send personalized transactional emails using Bento templates',
 						action: 'Send a transactional email',
+					},
+					{
+						name: 'Site Metrics',
+						value: 'siteStats',
+						description: 'Fetch site-wide analytics for a selected date range',
+						action: 'Fetch site metrics',
 					},
 					{
 						name: 'Subscriber Command',
@@ -977,6 +1041,440 @@ export class Bento implements INodeType {
 				default: '',
 				placeholder: '1.1.1.1',
 				description: 'The IP address associated with the email (optional but recommended for better validation)',
+			},
+			// Blacklist Check parameters
+			{
+				displayName: 'Domain',
+				name: 'blacklistDomain',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						operation: ['blacklistCheck'],
+					},
+				},
+				default: '',
+				placeholder: 'test.com',
+				description: 'Domain to evaluate against Bento\'s blacklist service',
+			},
+			{
+				displayName: 'IP Address',
+				name: 'blacklistIp',
+				type: 'string',
+				displayOptions: {
+					show: {
+						operation: ['blacklistCheck'],
+					},
+				},
+				default: '',
+				placeholder: '123.45.67.89',
+				description: 'Optional IP address to include in the blacklist evaluation',
+			},
+			// Content Moderation parameters
+			{
+				displayName: 'Content',
+				name: 'moderationContent',
+				type: 'string',
+				typeOptions: {
+					rows: 6,
+				},
+				required: true,
+				displayOptions: {
+					show: {
+						operation: ['contentModeration'],
+					},
+				},
+				default: '',
+				placeholder: 'Message text to evaluate...',
+				description: 'Content that should be evaluated by Bento\'s moderation service',
+			},
+			{
+				displayName: 'Metadata',
+				name: 'moderationMetadata',
+				type: 'fixedCollection',
+				typeOptions: {
+					multipleValues: true,
+				},
+				displayOptions: {
+					show: {
+						operation: ['contentModeration'],
+					},
+				},
+				default: {},
+				description: 'Optional metadata to provide additional context for moderation (key/value pairs)',
+				options: [
+					{
+						name: 'metadata',
+						displayName: 'Metadata',
+						values: [
+							{
+								displayName: 'Key',
+								name: 'key',
+								type: 'string',
+								default: '',
+								placeholder: 'source',
+							},
+							{
+								displayName: 'Value',
+								name: 'value',
+								type: 'string',
+								default: '',
+								placeholder: 'contact_form',
+							},
+						],
+					},
+				],
+			},
+			// Gender Guess parameters
+			{
+				displayName: 'Email',
+				name: 'genderGuessEmail',
+				type: 'string',
+				displayOptions: {
+					show: {
+						operation: ['genderGuess'],
+					},
+				},
+				default: '',
+				placeholder: 'subscriber@example.com',
+				description: 'Email address associated with the person (optional but improves accuracy)',
+			},
+			{
+				displayName: 'First Name',
+				name: 'genderGuessFirstName',
+				type: 'string',
+				displayOptions: {
+					show: {
+						operation: ['genderGuess'],
+					},
+				},
+				default: '',
+				description: 'First name to help the gender guess service',
+			},
+			{
+				displayName: 'Last Name',
+				name: 'genderGuessLastName',
+				type: 'string',
+				displayOptions: {
+					show: {
+						operation: ['genderGuess'],
+					},
+				},
+				default: '',
+				description: 'Last name to help the gender guess service',
+			},
+			// Geolocation Lookup parameters
+			{
+				displayName: 'IP Address',
+				name: 'geolocationIp',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						operation: ['geolocationLookup'],
+					},
+				},
+				default: '',
+				placeholder: '203.0.113.42',
+				description: 'IP address to look up',
+			},
+			{
+				displayName: 'User Agent',
+				name: 'geolocationUserAgent',
+				type: 'string',
+				displayOptions: {
+					show: {
+						operation: ['geolocationLookup'],
+					},
+				},
+				default: '',
+				description: 'Optional user agent string for additional context',
+			},
+			// Segment Metrics parameters
+			{
+				displayName: 'Segment ID',
+				name: 'segmentStatsSegmentId',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						operation: ['segmentStats'],
+					},
+				},
+				default: '',
+				placeholder: 'seg_12345',
+				description: 'Unique identifier of the Bento segment to analyze',
+			},
+			// Report Metrics parameters
+			{
+				displayName: 'Report ID',
+				name: 'reportStatsReportId',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						operation: ['reportStats'],
+					},
+				},
+				default: '',
+				placeholder: '456',
+				description: 'Identifier of the Bento report (report_id) to fetch metrics for',
+			},
+			// List Broadcasts parameters
+			{
+				displayName: 'Status',
+				name: 'listBroadcastsStatus',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: {
+					show: {
+						operation: ['listBroadcasts'],
+					},
+				},
+				options: [
+					{
+						name: 'Any',
+						value: 'any',
+					},
+					{
+						name: 'Archived',
+						value: 'archived',
+					},
+					{
+						name: 'Draft',
+						value: 'draft',
+					},
+					{
+						name: 'Scheduled',
+						value: 'scheduled',
+					},
+					{
+						name: 'Sending',
+						value: 'sending',
+					},
+					{
+						name: 'Sent',
+						value: 'sent',
+					},
+				],
+				default: 'any',
+				description: 'Filter broadcasts by status',
+			},
+			{
+				displayName: 'Created After',
+				name: 'listBroadcastsCreatedAfter',
+				type: 'dateTime',
+				displayOptions: {
+					show: {
+						operation: ['listBroadcasts'],
+					},
+				},
+				default: '',
+				description: 'Return broadcasts created after this date',
+			},
+			{
+				displayName: 'Tag IDs',
+				name: 'listBroadcastsTagIds',
+				type: 'fixedCollection',
+				typeOptions: {
+					multipleValues: true,
+				},
+				displayOptions: {
+					show: {
+						operation: ['listBroadcasts'],
+					},
+				},
+				default: {},
+				description: 'Filter broadcasts linked to specific tag IDs',
+				options: [
+					{
+						name: 'tagId',
+						displayName: 'Tag ID',
+						values: [
+							{
+								displayName: 'Tag ID',
+								name: 'id',
+								type: 'string',
+								default: '',
+								placeholder: 'tag_12345',
+							},
+						],
+					},
+				],
+			},
+			// Send Broadcast parameters
+			{
+				displayName: 'Campaign Name',
+				name: 'sendBroadcastName',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						operation: ['sendBroadcast'],
+					},
+				},
+				default: '',
+				placeholder: 'Campaign #1 — Plain Text Example',
+				description: 'Name to assign to the broadcast campaign',
+			},
+			{
+				displayName: 'Subject',
+				name: 'sendBroadcastSubject',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						operation: ['sendBroadcast'],
+					},
+				},
+				default: '',
+				placeholder: 'Hello Plain World',
+				description: 'Email subject line',
+			},
+			{
+				displayName: 'Content',
+				name: 'sendBroadcastContent',
+				type: 'string',
+				typeOptions: {
+					rows: 5,
+				},
+				required: true,
+				displayOptions: {
+					show: {
+						operation: ['sendBroadcast'],
+					},
+				},
+				default: '',
+				description: 'Email content (plain text or HTML based on Content Type)',
+			},
+			{
+				displayName: 'Content Type',
+				name: 'sendBroadcastType',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: {
+					show: {
+						operation: ['sendBroadcast'],
+					},
+				},
+				options: [
+					{
+						name: 'Plain Text',
+						value: 'plain',
+					},
+					{
+						name: 'HTML',
+						value: 'html',
+					},
+				],
+				default: 'plain',
+				description: 'Render the campaign as plain text or HTML',
+			},
+			{
+				displayName: 'From Email',
+				name: 'sendBroadcastFromEmail',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						operation: ['sendBroadcast'],
+					},
+				},
+				default: '',
+				placeholder: 'example@example.com',
+				description: 'Email address shown to recipients',
+			},
+			{
+				displayName: 'From Name',
+				name: 'sendBroadcastFromName',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						operation: ['sendBroadcast'],
+					},
+				},
+				default: '',
+				placeholder: 'John Doe',
+				description: 'Display name shown to recipients',
+			},
+			{
+				displayName: 'Approved',
+				name: 'sendBroadcastApproved',
+				type: 'boolean',
+				displayOptions: {
+					show: {
+						operation: ['sendBroadcast'],
+					},
+				},
+				default: false,
+				description: 'Whether to mark the broadcast as approved for sending',
+			},
+			{
+				displayName: 'Inclusive Tags',
+				name: 'sendBroadcastInclusiveTags',
+				type: 'string',
+				displayOptions: {
+					show: {
+						operation: ['sendBroadcast'],
+					},
+				},
+				default: '',
+				placeholder: 'lead,mql',
+				description: 'Comma-separated tags to include in the audience',
+			},
+			{
+				displayName: 'Exclusive Tags',
+				name: 'sendBroadcastExclusiveTags',
+				type: 'string',
+				displayOptions: {
+					show: {
+						operation: ['sendBroadcast'],
+					},
+				},
+				default: '',
+				placeholder: 'customers',
+				description: 'Comma-separated tags to exclude from the audience',
+			},
+			{
+				displayName: 'Segment ID',
+				name: 'sendBroadcastSegmentId',
+				type: 'string',
+				displayOptions: {
+					show: {
+						operation: ['sendBroadcast'],
+					},
+				},
+				default: '',
+				placeholder: 'segment_123456789',
+				description: 'Segment identifier to restrict the broadcast (optional)',
+			},
+			{
+				displayName: 'Batch Size Per Hour',
+				name: 'sendBroadcastBatchSizePerHour',
+				type: 'number',
+				typeOptions: {
+					minValue: 1,
+				},
+				displayOptions: {
+					show: {
+						operation: ['sendBroadcast'],
+					},
+				},
+				default: 0,
+				description: 'Optional hourly batch size limit (leave at 0 to use Bento defaults)',
+			},
+			{
+				displayName: 'Confirm Send',
+				name: 'sendBroadcastConfirm',
+				type: 'boolean',
+				displayOptions: {
+					show: {
+						operation: ['sendBroadcast'],
+					},
+				},
+				default: false,
+				description: 'Whether to confirm sending this broadcast',
 			},
 		],
 	};
@@ -1687,6 +2185,493 @@ export class Bento implements INodeType {
 						}
 						break;
 					}
+					case 'blacklistCheck': {
+						const domainInput = this.getNodeParameter('blacklistDomain', i) as string;
+						const domain = typeof domainInput === 'string' ? domainInput.trim() : '';
+						const ipInput = this.getNodeParameter('blacklistIp', i) as string;
+						const ip = typeof ipInput === 'string' ? ipInput.trim() : '';
+
+						try {
+							const initialContext: BlacklistCheckContext = {
+								itemIndex: i,
+								domain,
+								ip: ip || undefined,
+							};
+
+							const context = await runPipeline(this, initialContext, [
+								validateBlacklistInputAction,
+								buildBlacklistEndpointAction,
+								executeBlacklistRequestAction,
+							]);
+
+							responseData = {
+								operation: 'blacklistCheck',
+								success: true,
+								domain: context.domain,
+								ip: context.ip || undefined,
+								apiResponse: context.response,
+								message: 'Blacklist check completed successfully',
+							};
+						} catch (error) {
+							logSecureError.call(this, error, 'blacklistCheck', { itemIndex: i });
+
+							responseData = {
+								operation: 'blacklistCheck',
+								success: false,
+								domain,
+								ip: ip || undefined,
+								error: createSecureErrorMessage(error, 'blacklistCheck'),
+								message: 'Failed to run blacklist check. Please verify the domain and try again.',
+							};
+						}
+
+						break;
+					}
+					case 'contentModeration': {
+						const content = this.getNodeParameter('moderationContent', i) as string;
+						const metadataCollection = this.getNodeParameter('moderationMetadata', i) as {
+							metadata?: Array<{ key: string; value: string }>;
+						};
+
+						try {
+							const initialContext: ContentModerationContext = {
+								itemIndex: i,
+								content,
+								metadataPairs: metadataCollection?.metadata ?? [],
+							};
+
+							const context = await runPipeline(this, initialContext, [
+								validateContentModerationAction,
+								buildContentModerationPayloadAction,
+								executeContentModerationRequestAction,
+							]);
+
+							responseData = {
+								operation: 'contentModeration',
+								success: true,
+								apiResponse: context.response,
+								contentEvaluated: context.content,
+								metadata: Object.keys(context.metadata || {}).length ? context.metadata : undefined,
+								message: 'Content moderation completed successfully',
+							};
+						} catch (error) {
+							logSecureError.call(this, error, 'contentModeration', { itemIndex: i });
+
+							responseData = {
+								operation: 'contentModeration',
+								success: false,
+								content: content ? '[REDACTED]' : undefined,
+								error: createSecureErrorMessage(error, 'contentModeration'),
+								message: 'Failed to evaluate content. Please review the content and try again.',
+							};
+						}
+
+						break;
+					}
+					case 'genderGuess': {
+						const emailInput = this.getNodeParameter('genderGuessEmail', i) as string;
+						const requestEmail =
+							typeof emailInput === 'string' ? emailInput.trim() : '';
+						const email = sanitizeEmail(emailInput);
+						const firstNameInput = this.getNodeParameter('genderGuessFirstName', i) as string;
+						const lastNameInput = this.getNodeParameter('genderGuessLastName', i) as string;
+						const firstName = typeof firstNameInput === 'string' ? firstNameInput.trim() : '';
+						const lastName = typeof lastNameInput === 'string' ? lastNameInput.trim() : '';
+						const combinedName = [firstName, lastName].filter(Boolean).join(' ').trim();
+
+						try {
+							const initialContext: GenderGuessContext = {
+								itemIndex: i,
+								email,
+								requestEmail: requestEmail || undefined,
+								firstName: firstName || undefined,
+								lastName: lastName || undefined,
+								fullName: combinedName || undefined,
+							};
+
+							const context = await runPipeline(this, initialContext, [
+								validateGenderGuessAction,
+								buildGenderGuessPayloadAction,
+								executeGenderGuessRequestAction,
+							]);
+
+								responseData = {
+								operation: 'genderGuess',
+								success: true,
+								email: context.email || requestEmail || undefined,
+								name: context.fullName || undefined,
+								firstName: context.firstName || undefined,
+								lastName: context.lastName || undefined,
+								apiResponse: context.response,
+								summary: context.response?.prediction
+									? {
+											gender: context.response.prediction,
+											confidence: context.response.confidence,
+										}
+									: undefined,
+								message: 'Gender guess completed successfully',
+							};
+						} catch (error) {
+							logSecureError.call(this, error, 'genderGuess', { itemIndex: i });
+
+							responseData = {
+								operation: 'genderGuess',
+								success: false,
+								email: requestEmail || email || undefined,
+								name: combinedName || undefined,
+								error: createSecureErrorMessage(error, 'genderGuess'),
+								message: 'Failed to run gender guess. Provide a first and/or last name and try again.',
+							};
+						}
+
+						break;
+					}
+					case 'geolocationLookup': {
+						const ip = (this.getNodeParameter('geolocationIp', i) as string) || '';
+						const userAgent = (this.getNodeParameter('geolocationUserAgent', i) as string) || '';
+
+						try {
+							const initialContext: GeolocationLookupContext = {
+								itemIndex: i,
+								ip: ip.trim(),
+								userAgent: userAgent.trim(),
+							};
+
+							const context = await runPipeline(this, initialContext, [
+								validateGeolocationLookupAction,
+								buildGeolocationLookupPayloadAction,
+								executeGeolocationLookupRequestAction,
+							]);
+
+							responseData = {
+								operation: 'geolocationLookup',
+								success: true,
+								ip: context.ip,
+								userAgent: context.userAgent || undefined,
+								apiResponse: context.response,
+								location: context.response?.location || context.response?.data,
+								message: 'Geolocation lookup completed successfully',
+							};
+						} catch (error) {
+							logSecureError.call(this, error, 'geolocationLookup', { itemIndex: i });
+
+							responseData = {
+								operation: 'geolocationLookup',
+								success: false,
+								ip: ip ? '[REDACTED]' : undefined,
+								error: createSecureErrorMessage(error, 'geolocationLookup'),
+								message: 'Failed to look up geolocation. Please verify the IP address and try again.',
+							};
+						}
+
+						break;
+					}
+					case 'listBroadcasts': {
+						const status = this.getNodeParameter('listBroadcastsStatus', i) as ListBroadcastStatus;
+						const createdAfter = this.getNodeParameter('listBroadcastsCreatedAfter', i) as string;
+						const tagCollection = this.getNodeParameter('listBroadcastsTagIds', i) as {
+							tagId?: Array<{ id: string }>;
+						};
+
+						try {
+							const initialContext: ListBroadcastsContext = {
+								itemIndex: i,
+								status,
+								rawCreatedAfter: createdAfter,
+								tagIds: (tagCollection?.tagId ?? [])
+									.map(tag => tag?.id?.trim())
+									.filter((id): id is string => !!id),
+							};
+
+							const context = await runPipeline(this, initialContext, [
+								validateListBroadcastsAction,
+								buildListBroadcastsEndpointAction,
+								executeListBroadcastsRequestAction,
+							]);
+
+							const broadcasts: any[] = Array.isArray(context.response?.broadcasts)
+								? context.response.broadcasts
+								: Array.isArray(context.response)
+									? context.response
+									: [];
+
+							const scheduledCount = broadcasts.filter((broadcast: any) => broadcast?.status === 'scheduled').length;
+
+							responseData = {
+								operation: 'listBroadcasts',
+								success: true,
+								filters: {
+									status: context.status !== 'any' ? context.status : undefined,
+									createdAfter: context.createdAfter,
+									tagIds: context.tagIds.length > 0 ? context.tagIds : undefined,
+								},
+								total: broadcasts.length,
+								scheduledCount,
+								apiResponse: context.response,
+								message: `Retrieved ${broadcasts.length} broadcasts`,
+							};
+						} catch (error) {
+							logSecureError.call(this, error, 'listBroadcasts', { itemIndex: i });
+
+							responseData = {
+								operation: 'listBroadcasts',
+								success: false,
+								error: createSecureErrorMessage(error, 'listBroadcasts'),
+								message: 'Failed to list broadcasts. Review filters and try again.',
+							};
+						}
+
+						break;
+					}
+					case 'reportStats': {
+						const reportId = this.getNodeParameter('reportStatsReportId', i) as string;
+
+						try {
+							const initialContext: ReportStatsContext = {
+								itemIndex: i,
+								reportId: reportId.trim(),
+							};
+
+							const context = await runPipeline(this, initialContext, [
+								validateReportStatsAction,
+								buildReportStatsEndpointAction,
+								executeReportStatsRequestAction,
+							]);
+
+							const reportData = context.response?.report || context.response?.data || context.response;
+							const metricsSource = [reportData?.metrics, reportData];
+							const summaryMetrics: Record<string, number> = {};
+
+							const totalSends = findNumericMetric(metricsSource, ['total_sends', 'sends']);
+							if (typeof totalSends === 'number') summaryMetrics.totalSends = totalSends;
+
+							const opens = findNumericMetric(metricsSource, ['opens', 'open_count', 'total_opens']);
+							if (typeof opens === 'number') summaryMetrics.opens = opens;
+
+							const clicks = findNumericMetric(metricsSource, ['clicks', 'click_count', 'total_clicks']);
+							if (typeof clicks === 'number') summaryMetrics.clicks = clicks;
+
+							const revenue = findNumericMetric(metricsSource, ['revenue', 'total_revenue', 'gross_revenue']);
+							if (typeof revenue === 'number') summaryMetrics.revenue = revenue;
+
+							const conversions = findNumericMetric(metricsSource, ['conversions', 'conversion_count']);
+							if (typeof conversions === 'number') summaryMetrics.conversions = conversions;
+
+							const summary =
+								Object.keys(summaryMetrics).length > 0
+									? {
+											reportId: context.reportId,
+											metrics: summaryMetrics,
+										}
+									: undefined;
+
+							responseData = {
+								operation: 'reportStats',
+								success: true,
+								reportId: context.reportId,
+								apiResponse: context.response,
+								summary,
+								message: 'Report metrics retrieved successfully',
+							};
+						} catch (error) {
+							logSecureError.call(this, error, 'reportStats', { itemIndex: i });
+
+							responseData = {
+								operation: 'reportStats',
+								success: false,
+								reportId: reportId || undefined,
+								error: createSecureErrorMessage(error, 'reportStats'),
+								message: 'Failed to fetch report metrics. Verify the report ID and try again.',
+							};
+						}
+
+						break;
+					}
+					case 'sendBroadcast': {
+						const name = (this.getNodeParameter('sendBroadcastName', i) as string) || '';
+						const subject = (this.getNodeParameter('sendBroadcastSubject', i) as string) || '';
+						const content = (this.getNodeParameter('sendBroadcastContent', i) as string) || '';
+						const type = this.getNodeParameter('sendBroadcastType', i) as SendBroadcastContentType;
+						const fromEmail = (this.getNodeParameter('sendBroadcastFromEmail', i) as string) || '';
+						const fromName = (this.getNodeParameter('sendBroadcastFromName', i) as string) || '';
+						const approved = this.getNodeParameter('sendBroadcastApproved', i) as boolean;
+						const inclusiveTags = (this.getNodeParameter('sendBroadcastInclusiveTags', i) as string) || '';
+						const exclusiveTags = (this.getNodeParameter('sendBroadcastExclusiveTags', i) as string) || '';
+						const segmentId = (this.getNodeParameter('sendBroadcastSegmentId', i) as string) || '';
+						const batchSizePerHour = this.getNodeParameter('sendBroadcastBatchSizePerHour', i) as number;
+						const confirm = this.getNodeParameter('sendBroadcastConfirm', i) as boolean;
+
+						try {
+							const initialContext: SendBroadcastContext = {
+								itemIndex: i,
+								name: name.trim(),
+								subject: subject.trim(),
+								content,
+								type,
+								fromEmail: fromEmail.trim(),
+								fromName: fromName.trim(),
+								approved,
+								inclusiveTags: inclusiveTags.trim() || undefined,
+								exclusiveTags: exclusiveTags.trim() || undefined,
+								segmentId: segmentId.trim() || undefined,
+								batchSizePerHour:
+									Number.isFinite(batchSizePerHour) && batchSizePerHour > 0
+										? batchSizePerHour
+										: undefined,
+								confirmed: confirm,
+							};
+
+							const context = await runPipeline(this, initialContext, [
+								validateSendBroadcastAction,
+								buildSendBroadcastPayloadAction,
+								executeSendBroadcastRequestAction,
+							]);
+
+							const errors = Array.isArray(context.response?.errors) ? context.response.errors : undefined;
+							const broadcasts = Array.isArray(context.response?.broadcasts)
+								? context.response.broadcasts
+								: undefined;
+
+							responseData = {
+								operation: 'sendBroadcast',
+								success: !errors || errors.length === 0,
+								name: context.name,
+								subject: context.subject,
+								approved: context.approved,
+								segmentId: context.segmentId,
+								apiResponse: context.response,
+								createdBroadcasts: broadcasts,
+								errors: errors && errors.length > 0 ? errors : undefined,
+								message: errors && errors.length > 0
+									? 'Broadcast batch submitted with partial errors. Review the errors array for details.'
+									: 'Broadcast batch submitted successfully',
+							};
+						} catch (error) {
+							logSecureError.call(this, error, 'sendBroadcast', { itemIndex: i });
+
+							responseData = {
+								operation: 'sendBroadcast',
+								success: false,
+								name: name || undefined,
+								error: createSecureErrorMessage(error, 'sendBroadcast'),
+								message: 'Failed to submit broadcast batch. Verify the campaign details and try again.',
+							};
+						}
+
+						break;
+					}
+					case 'segmentStats': {
+						const segmentId = (this.getNodeParameter('segmentStatsSegmentId', i) as string) || '';
+
+						try {
+							const initialContext: SegmentStatsContext = {
+								itemIndex: i,
+								segmentId: segmentId.trim(),
+							};
+
+							const context = await runPipeline(this, initialContext, [
+								validateSegmentStatsAction,
+								buildSegmentStatsEndpointAction,
+								executeSegmentStatsRequestAction,
+							]);
+
+							const metrics = context.response?.metrics || context.response?.data?.metrics || context.response;
+							const summaryMetrics: Record<string, number> = {};
+
+							const subscriberCount =
+								metrics?.total_subscribers ?? metrics?.totalSubscribers ?? metrics?.subscriber_count;
+							if (typeof subscriberCount === 'number') summaryMetrics.totalSubscribers = subscriberCount;
+
+							const opens = metrics?.opens ?? metrics?.open_count ?? metrics?.total_opens;
+							if (typeof opens === 'number') summaryMetrics.opens = opens;
+
+							const clicks = metrics?.clicks ?? metrics?.click_count ?? metrics?.total_clicks;
+							if (typeof clicks === 'number') summaryMetrics.clicks = clicks;
+
+							const unsubscribes =
+								metrics?.unsubscribes ?? metrics?.unsubscribe_count ?? metrics?.total_unsubscribes;
+							if (typeof unsubscribes === 'number') summaryMetrics.unsubscribes = unsubscribes;
+
+							const summary =
+								Object.keys(summaryMetrics).length > 0
+									? {
+											segmentId: context.segmentId,
+											metrics: summaryMetrics,
+										}
+									: undefined;
+
+							responseData = {
+								operation: 'segmentStats',
+								success: true,
+								segmentId: context.segmentId,
+								apiResponse: context.response,
+								summary,
+								message: 'Segment metrics retrieved successfully',
+							};
+						} catch (error) {
+							logSecureError.call(this, error, 'segmentStats', { itemIndex: i });
+
+							responseData = {
+								operation: 'segmentStats',
+								success: false,
+								segmentId: segmentId || undefined,
+								error: createSecureErrorMessage(error, 'segmentStats'),
+								message: 'Failed to fetch segment metrics. Verify the segment ID and try again.',
+							};
+						}
+
+						break;
+					}
+					case 'siteStats': {
+						try {
+							const initialContext: SiteStatsContext = {
+								itemIndex: i,
+							};
+
+							const context = await runPipeline(this, initialContext, [
+								buildSiteStatsEndpointAction,
+								executeSiteStatsRequestAction,
+							]);
+
+							const totals = context.response?.totals || context.response?.data?.totals || context.response;
+							const summaryTotals: Record<string, number> = {};
+
+							const totalSubscribers = totals?.total_subscribers ?? totals?.totalSubscribers;
+							if (typeof totalSubscribers === 'number') summaryTotals.totalSubscribers = totalSubscribers;
+
+							const activeSubscribers = totals?.active_subscribers ?? totals?.activeSubscribers;
+							if (typeof activeSubscribers === 'number') summaryTotals.activeSubscribers = activeSubscribers;
+
+							const inactiveSubscribers = totals?.inactive_subscribers ?? totals?.inactiveSubscribers;
+							if (typeof inactiveSubscribers === 'number') summaryTotals.inactiveSubscribers = inactiveSubscribers;
+
+							const summary =
+								Object.keys(summaryTotals).length > 0
+									? {
+											totals: summaryTotals,
+										}
+									: undefined;
+
+							responseData = {
+								operation: 'siteStats',
+								success: true,
+								apiResponse: context.response,
+								summary,
+								message: 'Site metrics retrieved successfully',
+							};
+						} catch (error) {
+							logSecureError.call(this, error, 'siteStats', { itemIndex: i });
+
+							responseData = {
+								operation: 'siteStats',
+								success: false,
+								error: createSecureErrorMessage(error, 'siteStats'),
+								message: 'Failed to fetch site metrics. Try again later.',
+							};
+						}
+
+						break;
+					}
 					default:
 						throw new NodeOperationError(this.getNode(), `Unknown operation: ${operation}`, {
 							itemIndex: i,
@@ -1712,6 +2697,834 @@ export class Bento implements INodeType {
 		return [returnData];
 	}
 
+}
+
+type PipelineAction<TContext> = (this: IExecuteFunctions, context: TContext) => Promise<TContext> | TContext;
+
+async function runPipeline<TContext>(
+	executor: IExecuteFunctions,
+	initialContext: TContext,
+	actions: PipelineAction<TContext>[]
+): Promise<TContext> {
+	let context = initialContext;
+
+	for (const action of actions) {
+		context = await action.call(executor, context);
+	}
+
+	return context;
+}
+
+interface BlacklistCheckContext {
+	itemIndex: number;
+	domain: string;
+	ip?: string;
+	endpoint?: string;
+	response?: any;
+}
+
+function validateBlacklistInputAction(this: IExecuteFunctions, context: BlacklistCheckContext): BlacklistCheckContext {
+	const { domain, ip, itemIndex } = context;
+	const trimmedDomain = domain?.trim();
+
+	if (!trimmedDomain) {
+		throw new NodeOperationError(this.getNode(), 'Domain is required for blacklist checks', {
+			itemIndex,
+		});
+	}
+
+	if (trimmedDomain.length > 253) {
+		throw new NodeOperationError(this.getNode(), 'Domain exceeds maximum length of 253 characters', {
+			itemIndex,
+		});
+	}
+
+	const domainPattern = /^(?!-)(?:[a-zA-Z0-9-]{0,62}[a-zA-Z0-9]\.)+[A-Za-z]{2,}$/;
+	if (!domainPattern.test(trimmedDomain)) {
+		throw new NodeOperationError(this.getNode(), 'Domain format is invalid', {
+			itemIndex,
+		});
+	}
+
+	if (ip) {
+		validateInputLength.call(this, ip, INPUT_LIMITS.IP_ADDRESS, 'IP Address', itemIndex);
+	}
+
+	context.domain = trimmedDomain.toLowerCase();
+
+	return context;
+}
+
+function buildBlacklistEndpointAction(this: IExecuteFunctions, context: BlacklistCheckContext): BlacklistCheckContext {
+	const params = new URLSearchParams();
+	params.append('domain', context.domain);
+
+	if (context.ip) {
+		params.append('ip', context.ip);
+	}
+
+	context.endpoint = `/api/v1/experimental/blacklist?${params.toString()}`;
+
+	return context;
+}
+
+async function executeBlacklistRequestAction(
+	this: IExecuteFunctions,
+	context: BlacklistCheckContext
+): Promise<BlacklistCheckContext> {
+	if (!context.endpoint) {
+		throw new NodeOperationError(this.getNode(), 'Blacklist endpoint not generated', {
+			itemIndex: context.itemIndex,
+		});
+	}
+
+	context.response = await makeBentoRequest.call(
+		this,
+		'GET',
+		context.endpoint,
+		undefined,
+		context.itemIndex
+	);
+
+	return context;
+}
+
+interface ContentModerationContext {
+	itemIndex: number;
+	content: string;
+	metadataPairs: Array<{ key: string; value: string }>;
+	metadata?: Record<string, string>;
+	payload?: {
+		content: string;
+		metadata?: Record<string, string>;
+	};
+	response?: any;
+}
+
+function validateContentModerationAction(
+	this: IExecuteFunctions,
+	context: ContentModerationContext
+): ContentModerationContext {
+	const { content, itemIndex } = context;
+
+	if (typeof content !== 'string' || content.trim() === '') {
+		throw new NodeOperationError(this.getNode(), 'Content is required for moderation', {
+			itemIndex,
+		});
+	}
+
+	validateInputLength.call(this, content, INPUT_LIMITS.TEXT_CONTENT, 'Content', itemIndex);
+
+	return context;
+}
+
+function buildContentModerationPayloadAction(
+	this: IExecuteFunctions,
+	context: ContentModerationContext
+): ContentModerationContext {
+	const trimmedContent = context.content.trim();
+	context.content = trimmedContent;
+
+	const metadata: Record<string, string> = {};
+	for (const pair of context.metadataPairs) {
+		if (pair?.key && pair?.value) {
+			validateInputLength.call(this, pair.key, INPUT_LIMITS.CUSTOM_FIELD_KEY, 'Metadata Key', context.itemIndex);
+			validateInputLength.call(this, pair.value, INPUT_LIMITS.CUSTOM_FIELD_VALUE, 'Metadata Value', context.itemIndex);
+			metadata[pair.key] = pair.value;
+		}
+	}
+
+	context.metadata = metadata;
+
+	const payload: {
+		content: string;
+		metadata?: Record<string, string>;
+	} = {
+		content: trimmedContent,
+	};
+
+	if (Object.keys(metadata).length > 0) {
+		payload.metadata = metadata;
+	}
+
+	context.payload = payload;
+
+	return context;
+}
+
+async function executeContentModerationRequestAction(
+	this: IExecuteFunctions,
+	context: ContentModerationContext
+): Promise<ContentModerationContext> {
+	if (!context.payload) {
+		throw new NodeOperationError(this.getNode(), 'Failed to build request payload for content moderation', {
+			itemIndex: context.itemIndex,
+		});
+	}
+
+	if (!validatePayloadSize(context.payload)) {
+		throw new NodeOperationError(this.getNode(), 'Content moderation payload exceeds size limit', {
+			itemIndex: context.itemIndex,
+		});
+	}
+
+	context.response = await makeBentoRequest.call(
+		this,
+		'POST',
+		'/api/v1/experimental/content_moderation',
+		context.payload,
+		context.itemIndex
+	);
+
+	return context;
+}
+
+interface GenderGuessContext {
+	itemIndex: number;
+	email: string;
+	requestEmail?: string;
+	firstName?: string;
+	lastName?: string;
+	fullName?: string;
+	endpoint?: string;
+	payload?: {
+		email?: string;
+		name?: string;
+		first_name?: string;
+		last_name?: string;
+	};
+	response?: any;
+}
+
+function validateGenderGuessAction(this: IExecuteFunctions, context: GenderGuessContext): GenderGuessContext {
+	const { email, firstName, lastName, fullName, itemIndex } = context;
+
+	if (!fullName) {
+		throw new NodeOperationError(
+			this.getNode(),
+			'Provide at least a first or last name for gender guess',
+			{
+				itemIndex,
+			}
+		);
+	}
+
+	validateInputLength.call(this, fullName, INPUT_LIMITS.VALIDATE_NAME, 'Name', itemIndex);
+
+	if (firstName) {
+		validateInputLength.call(this, firstName, INPUT_LIMITS.NAME, 'First Name', itemIndex);
+	}
+
+	if (lastName) {
+		validateInputLength.call(this, lastName, INPUT_LIMITS.NAME, 'Last Name', itemIndex);
+	}
+
+	if (email) {
+		validateInputLength.call(this, email, INPUT_LIMITS.EMAIL, 'Email', itemIndex);
+		if (!isValidEmail(email)) {
+			throw new NodeOperationError(this.getNode(), 'Invalid email format', {
+				itemIndex,
+			});
+		}
+	}
+
+	return context;
+}
+
+function buildGenderGuessPayloadAction(this: IExecuteFunctions, context: GenderGuessContext): GenderGuessContext {
+	const payload: {
+		email?: string;
+		name?: string;
+		first_name?: string;
+		last_name?: string;
+	} = {};
+
+	const emailForRequest = context.requestEmail ?? context.email;
+
+	if (emailForRequest) {
+		payload.email = emailForRequest;
+		context.email = emailForRequest;
+		context.requestEmail = emailForRequest;
+	}
+
+	const fullName = context.fullName ?? [context.firstName, context.lastName].filter(Boolean).join(' ').trim();
+
+	if (fullName) {
+		payload.name = fullName;
+		context.fullName = fullName;
+	}
+
+	const queryParams: string[] = [];
+
+	if (fullName) {
+		queryParams.push(`name=${encodeURIComponent(fullName)}`);
+	}
+
+	if (context.requestEmail) {
+		queryParams.push(`email=${encodeURIComponent(context.requestEmail)}`);
+	}
+
+	context.endpoint = `/api/v1/experimental/gender${queryParams.length ? `?${queryParams.join('&')}` : ''}`;
+
+	if (context.firstName) {
+		payload.first_name = context.firstName;
+	}
+
+	if (context.lastName) {
+		payload.last_name = context.lastName;
+	}
+
+	if (!payload.name) {
+		throw new NodeOperationError(this.getNode(), 'Unable to build payload for gender guess', {
+			itemIndex: context.itemIndex,
+		});
+	}
+
+	context.payload = payload;
+
+	return context;
+}
+
+async function executeGenderGuessRequestAction(
+	this: IExecuteFunctions,
+	context: GenderGuessContext
+): Promise<GenderGuessContext> {
+	if (!context.payload) {
+		throw new NodeOperationError(this.getNode(), 'Missing payload for gender guess', {
+			itemIndex: context.itemIndex,
+		});
+	}
+
+	if (!validatePayloadSize(context.payload)) {
+		throw new NodeOperationError(this.getNode(), 'Gender guess payload exceeds size limit', {
+			itemIndex: context.itemIndex,
+		});
+	}
+
+	const endpoint = context.endpoint ?? '/api/v1/experimental/gender';
+
+	context.response = await makeBentoRequest.call(this, 'POST', endpoint, context.payload, context.itemIndex);
+
+	return context;
+}
+
+interface GeolocationLookupContext {
+	itemIndex: number;
+	ip: string;
+	userAgent?: string;
+	endpoint?: string;
+	payload?: {
+		ip: string;
+		user_agent?: string;
+	};
+	response?: any;
+}
+
+function validateGeolocationLookupAction(
+	this: IExecuteFunctions,
+	context: GeolocationLookupContext
+): GeolocationLookupContext {
+	const { ip, userAgent, itemIndex } = context;
+
+	if (!ip) {
+		throw new NodeOperationError(this.getNode(), 'IP address is required for geolocation lookup', {
+			itemIndex,
+		});
+	}
+
+	validateInputLength.call(this, ip, INPUT_LIMITS.IP_ADDRESS, 'IP Address', itemIndex);
+
+	if (userAgent) {
+		validateInputLength.call(this, userAgent, INPUT_LIMITS.USER_AGENT, 'User Agent', itemIndex);
+	}
+
+	return context;
+}
+
+function buildGeolocationLookupPayloadAction(
+	this: IExecuteFunctions,
+	context: GeolocationLookupContext
+): GeolocationLookupContext {
+	const queryParams: string[] = [`ip=${encodeURIComponent(context.ip)}`];
+
+	if (context.userAgent) {
+		queryParams.push(`user_agent=${encodeURIComponent(context.userAgent)}`);
+	}
+
+	context.endpoint = `/api/v1/experimental/geolocation?${queryParams.join('&')}`;
+	context.payload = undefined;
+
+	return context;
+}
+
+async function executeGeolocationLookupRequestAction(
+	this: IExecuteFunctions,
+	context: GeolocationLookupContext
+): Promise<GeolocationLookupContext> {
+	const endpoint =
+		context.endpoint ?? `/api/v1/experimental/geolocation?ip=${encodeURIComponent(context.ip)}`;
+
+	context.response = await makeBentoRequest.call(this, 'GET', endpoint, undefined, context.itemIndex);
+
+	return context;
+}
+
+function formatDateToYmd(date: Date): string {
+	const year = date.getUTCFullYear();
+	const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+	const day = String(date.getUTCDate()).padStart(2, '0');
+	return `${year}-${month}-${day}`;
+}
+
+function parseDateInput(
+	executor: IExecuteFunctions,
+	value: string | undefined,
+	fieldName: string,
+	itemIndex: number
+): Date {
+	if (!value) {
+		throw new NodeOperationError(executor.getNode(), `${fieldName} is required when using a custom range`, {
+			itemIndex,
+		});
+	}
+
+	const parsed = new Date(value);
+	if (Number.isNaN(parsed.getTime())) {
+		throw new NodeOperationError(executor.getNode(), `${fieldName} is invalid`, {
+			itemIndex,
+		});
+	}
+
+	return parsed;
+}
+
+interface SiteStatsContext {
+	itemIndex: number;
+	endpoint?: string;
+	response?: any;
+}
+
+function buildSiteStatsEndpointAction(this: IExecuteFunctions, context: SiteStatsContext): SiteStatsContext {
+	context.endpoint = '/api/v1/stats/site';
+
+	return context;
+}
+
+async function executeSiteStatsRequestAction(
+	this: IExecuteFunctions,
+	context: SiteStatsContext
+): Promise<SiteStatsContext> {
+	if (!context.endpoint) {
+		throw new NodeOperationError(this.getNode(), 'Site metrics endpoint not generated', {
+			itemIndex: context.itemIndex,
+		});
+	}
+
+	context.response = await makeBentoRequest.call(
+		this,
+		'GET',
+		context.endpoint,
+		undefined,
+		context.itemIndex
+	);
+
+	return context;
+}
+
+interface SegmentStatsContext {
+	itemIndex: number;
+	segmentId: string;
+	endpoint?: string;
+	response?: any;
+}
+
+function validateSegmentStatsAction(this: IExecuteFunctions, context: SegmentStatsContext): SegmentStatsContext {
+	const segmentId = context.segmentId?.trim();
+
+	if (!segmentId) {
+		throw new NodeOperationError(this.getNode(), 'Segment ID is required for segment metrics', {
+			itemIndex: context.itemIndex,
+		});
+	}
+
+	validateInputLength.call(this, segmentId, INPUT_LIMITS.SEGMENT_ID, 'Segment ID', context.itemIndex);
+
+	context.segmentId = segmentId;
+
+	return context;
+}
+
+function buildSegmentStatsEndpointAction(this: IExecuteFunctions, context: SegmentStatsContext): SegmentStatsContext {
+	context.endpoint = `/api/v1/stats/segment?segment_id=${encodeURIComponent(context.segmentId)}`;
+
+	return context;
+}
+
+async function executeSegmentStatsRequestAction(
+	this: IExecuteFunctions,
+	context: SegmentStatsContext
+): Promise<SegmentStatsContext> {
+	if (!context.endpoint) {
+		throw new NodeOperationError(this.getNode(), 'Segment metrics endpoint not generated', {
+			itemIndex: context.itemIndex,
+		});
+	}
+
+	context.response = await makeBentoRequest.call(
+		this,
+		'GET',
+		context.endpoint,
+		undefined,
+		context.itemIndex
+	);
+
+	return context;
+}
+
+interface ReportStatsContext {
+	itemIndex: number;
+	reportId: string;
+	endpoint?: string;
+	response?: any;
+}
+
+function validateReportStatsAction(this: IExecuteFunctions, context: ReportStatsContext): ReportStatsContext {
+	if (!context.reportId) {
+		throw new NodeOperationError(this.getNode(), 'Report ID is required', {
+			itemIndex: context.itemIndex,
+		});
+	}
+
+	validateInputLength.call(this, context.reportId, INPUT_LIMITS.SEGMENT_ID, 'Report ID', context.itemIndex);
+
+	return context;
+}
+
+function buildReportStatsEndpointAction(this: IExecuteFunctions, context: ReportStatsContext): ReportStatsContext {
+	context.endpoint = `/api/v1/stats/report?report_id=${encodeURIComponent(context.reportId)}`;
+
+	return context;
+}
+
+async function executeReportStatsRequestAction(
+	this: IExecuteFunctions,
+	context: ReportStatsContext
+): Promise<ReportStatsContext> {
+	if (!context.endpoint) {
+		throw new NodeOperationError(this.getNode(), 'Report metrics endpoint not generated', {
+			itemIndex: context.itemIndex,
+		});
+	}
+
+	context.response = await makeBentoRequest.call(
+		this,
+		'GET',
+		context.endpoint,
+		undefined,
+		context.itemIndex
+	);
+
+	return context;
+}
+
+function findNumericMetric(sources: Array<any>, keys: string[]): number | undefined {
+	for (const source of sources) {
+		if (!source || typeof source !== 'object') {
+			continue;
+		}
+
+		for (const key of keys) {
+			const value = source[key];
+			if (typeof value === 'number' && Number.isFinite(value)) {
+				return value;
+			}
+		}
+	}
+
+	return undefined;
+}
+
+type ListBroadcastStatus = 'any' | 'draft' | 'scheduled' | 'sending' | 'sent' | 'archived';
+
+interface ListBroadcastsContext {
+	itemIndex: number;
+	status: ListBroadcastStatus;
+	rawCreatedAfter?: string;
+	createdAfter?: string;
+	tagIds: string[];
+	endpoint?: string;
+	response?: any;
+}
+
+function validateListBroadcastsAction(this: IExecuteFunctions, context: ListBroadcastsContext): ListBroadcastsContext {
+	if (context.rawCreatedAfter) {
+		const parsed = parseDateInput(this, context.rawCreatedAfter, 'Created After', context.itemIndex);
+		context.createdAfter = formatDateToYmd(parsed);
+	}
+
+	if (context.tagIds.length > 0) {
+		context.tagIds = context.tagIds.map(tagId => {
+			validateInputLength.call(this, tagId, INPUT_LIMITS.SEGMENT_ID, 'Tag ID', context.itemIndex);
+			return tagId;
+		});
+	}
+
+	return context;
+}
+
+function buildListBroadcastsEndpointAction(
+	this: IExecuteFunctions,
+	context: ListBroadcastsContext
+): ListBroadcastsContext {
+	const params = new URLSearchParams();
+
+	if (context.status && context.status !== 'any') {
+		params.append('status', context.status);
+	}
+
+	if (context.createdAfter) {
+		params.append('created_after', context.createdAfter);
+	}
+
+	if (context.tagIds.length > 0) {
+		params.append('tag_ids', context.tagIds.join(','));
+	}
+
+	const queryString = params.toString();
+	context.endpoint = queryString
+		? `/api/v1/fetch/broadcasts?${queryString}`
+		: '/api/v1/fetch/broadcasts';
+
+	return context;
+}
+
+async function executeListBroadcastsRequestAction(
+	this: IExecuteFunctions,
+	context: ListBroadcastsContext
+): Promise<ListBroadcastsContext> {
+	if (!context.endpoint) {
+		throw new NodeOperationError(this.getNode(), 'Broadcast listing endpoint not generated', {
+			itemIndex: context.itemIndex,
+		});
+	}
+
+	context.response = await makeBentoRequest.call(
+		this,
+		'GET',
+		context.endpoint,
+		undefined,
+		context.itemIndex
+	);
+
+	return context;
+}
+
+type SendBroadcastContentType = 'plain' | 'html';
+
+interface SendBroadcastContext {
+	itemIndex: number;
+	name: string;
+	subject: string;
+	content: string;
+	type: SendBroadcastContentType;
+	fromEmail: string;
+	fromName: string;
+	approved: boolean;
+	inclusiveTags?: string;
+	exclusiveTags?: string;
+	segmentId?: string;
+	batchSizePerHour?: number;
+	confirmed: boolean;
+	payload?: {
+		broadcasts: Array<{
+			name: string;
+			subject: string;
+			content: string;
+			type: SendBroadcastContentType;
+			from: {
+				email: string;
+				name: string;
+			};
+			approved: boolean;
+			inclusive_tags?: string;
+			exclusive_tags?: string;
+			segment_id?: string;
+			batch_size_per_hour?: number;
+		}>;
+	};
+	response?: any;
+}
+
+function validateSendBroadcastAction(this: IExecuteFunctions, context: SendBroadcastContext): SendBroadcastContext {
+	if (!context.confirmed) {
+		throw new NodeOperationError(this.getNode(), 'Please enable Confirm Send to queue the broadcast', {
+			itemIndex: context.itemIndex,
+		});
+	}
+
+	if (!context.name) {
+		throw new NodeOperationError(this.getNode(), 'Campaign name is required', {
+			itemIndex: context.itemIndex,
+		});
+	}
+	validateInputLength.call(this, context.name, INPUT_LIMITS.VALIDATE_NAME, 'Campaign Name', context.itemIndex);
+
+	if (!context.subject) {
+		throw new NodeOperationError(this.getNode(), 'Subject is required', {
+			itemIndex: context.itemIndex,
+		});
+	}
+	validateInputLength.call(this, context.subject, INPUT_LIMITS.SUBJECT, 'Subject', context.itemIndex);
+
+	if (!context.content || context.content.trim() === '') {
+		throw new NodeOperationError(this.getNode(), 'Content cannot be empty', {
+			itemIndex: context.itemIndex,
+		});
+	}
+
+	const contentLimit =
+		context.type === 'html' ? INPUT_LIMITS.HTML_CONTENT : INPUT_LIMITS.TEXT_CONTENT;
+	validateInputLength.call(this, context.content, contentLimit, 'Content', context.itemIndex);
+
+	if (!context.fromEmail) {
+		throw new NodeOperationError(this.getNode(), 'From email is required', {
+			itemIndex: context.itemIndex,
+		});
+	}
+	validateInputLength.call(this, context.fromEmail, INPUT_LIMITS.EMAIL, 'From Email', context.itemIndex);
+	if (!isValidEmail(context.fromEmail)) {
+		throw new NodeOperationError(this.getNode(), 'From email address is invalid', {
+			itemIndex: context.itemIndex,
+		});
+	}
+
+	if (!context.fromName) {
+		throw new NodeOperationError(this.getNode(), 'From name is required', {
+			itemIndex: context.itemIndex,
+		});
+	}
+	validateInputLength.call(this, context.fromName, INPUT_LIMITS.VALIDATE_NAME, 'From Name', context.itemIndex);
+
+	if (!['plain', 'html'].includes(context.type)) {
+		throw new NodeOperationError(this.getNode(), `Unsupported content type: ${context.type}`, {
+			itemIndex: context.itemIndex,
+		});
+	}
+
+	if (context.inclusiveTags) {
+		validateInputLength.call(
+			this,
+			context.inclusiveTags,
+			INPUT_LIMITS.CUSTOM_FIELD_VALUE,
+			'Inclusive Tags',
+			context.itemIndex
+		);
+	}
+
+	if (context.exclusiveTags) {
+		validateInputLength.call(
+			this,
+			context.exclusiveTags,
+			INPUT_LIMITS.CUSTOM_FIELD_VALUE,
+			'Exclusive Tags',
+			context.itemIndex
+		);
+	}
+
+	if (context.segmentId) {
+		validateInputLength.call(this, context.segmentId, INPUT_LIMITS.SEGMENT_ID, 'Segment ID', context.itemIndex);
+	}
+
+	if (context.batchSizePerHour !== undefined) {
+		if (!Number.isFinite(context.batchSizePerHour) || context.batchSizePerHour <= 0) {
+			throw new NodeOperationError(this.getNode(), 'Batch size per hour must be a positive number', {
+				itemIndex: context.itemIndex,
+			});
+		}
+		context.batchSizePerHour = Math.floor(context.batchSizePerHour);
+	}
+
+	return context;
+}
+
+function buildSendBroadcastPayloadAction(
+	this: IExecuteFunctions,
+	context: SendBroadcastContext
+): SendBroadcastContext {
+	const broadcastPayload: {
+		name: string;
+		subject: string;
+		content: string;
+		type: SendBroadcastContentType;
+		from: {
+			email: string;
+			name: string;
+		};
+		approved: boolean;
+		inclusive_tags?: string;
+		exclusive_tags?: string;
+		segment_id?: string;
+		batch_size_per_hour?: number;
+	} = {
+		name: context.name,
+		subject: context.subject,
+		content: context.content,
+		type: context.type,
+		from: {
+			email: context.fromEmail,
+			name: context.fromName,
+		},
+		approved: context.approved,
+	};
+
+	if (context.inclusiveTags) {
+		broadcastPayload.inclusive_tags = context.inclusiveTags;
+	}
+
+	if (context.exclusiveTags) {
+		broadcastPayload.exclusive_tags = context.exclusiveTags;
+	}
+
+	if (context.segmentId) {
+		broadcastPayload.segment_id = context.segmentId;
+	}
+
+	if (context.batchSizePerHour !== undefined) {
+		broadcastPayload.batch_size_per_hour = context.batchSizePerHour;
+	}
+
+	context.payload = {
+		broadcasts: [broadcastPayload],
+	};
+
+	return context;
+}
+
+async function executeSendBroadcastRequestAction(
+	this: IExecuteFunctions,
+	context: SendBroadcastContext
+): Promise<SendBroadcastContext> {
+	if (!context.payload) {
+		throw new NodeOperationError(this.getNode(), 'Broadcast payload not built', {
+			itemIndex: context.itemIndex,
+		});
+	}
+
+	if (!validatePayloadSize(context.payload)) {
+		throw new NodeOperationError(this.getNode(), 'Broadcast payload exceeds size limits', {
+			itemIndex: context.itemIndex,
+		});
+	}
+
+	context.response = await makeBentoRequest.call(
+		this,
+		'POST',
+		'/api/v1/batch/broadcasts',
+		context.payload,
+		context.itemIndex
+	);
+
+	return context;
 }
 
 /**
@@ -1836,8 +3649,7 @@ async function makeBentoRequest(
 
 					const response = await this.helpers.httpRequest(options);
 
-					// Request successful, release slot and return
-					releaseRequestSlot(nodeId);
+					// Request successful; release handled in finally block
 					return response;
 
 				} catch (error: any) {
