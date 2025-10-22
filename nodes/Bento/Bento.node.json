@@ -1,5 +1,5 @@
 {
-	"node": "bento-n8n-sdk.bento",
+	"node": "n8n-nodes-bento.bento",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
 	"categories": ["Marketing", "Email", "Communication"],

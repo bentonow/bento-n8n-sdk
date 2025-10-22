@@ -1,4 +1,5 @@
 # Bento n8n Community Node
+
 <img align="right" src="https://app.bentonow.com/brand/logoanim.gif">
 
 > [!TIP]
@@ -8,33 +9,35 @@ The Bento n8n Community Node makes it quick and easy to integrate Bento's powerf
 
 Get started with our [📚 integration guides](https://docs.bentonow.com), or [📘 browse the API reference](https://docs.bentonow.com/subscribers).
 
+[![npm version](https://badge.fury.io/js/n8n-nodes-bento.svg)](https://badge.fury.io/js/n8n-nodes-bento)
 
-[![npm version](https://badge.fury.io/js/bento-n8n-sdk.svg)](https://badge.fury.io/js/bento-n8n-sdk)
-
-Table of contents
-=================
+# Table of contents
 
 <!--ts-->
-* [Features](#features)
-* [Requirements](#requirements)
-* [Getting started](#getting-started)
-    * [Installation](#installation)
-    * [Configuration](#configuration)
-* [Operations](#operations)
-* [Things to Know](#things-to-know)
-* [Contributing](#contributing)
-* [License](#license)
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Getting started](#getting-started)
+  - [Installation](#installation)
+  - [Configuration](#configuration)
+- [Operations](#operations)
+- [Things to Know](#things-to-know)
+- [Contributing](#contributing)
+- [License](#license)
 <!--te-->
 
 ## Features
 
-* **Subscriber Management**: Create, update, and retrieve subscriber information with custom fields and tags
-* **Event Tracking**: Track custom events and user behavior for advanced segmentation and automation
-* **Transactional Emails**: Send personalized transactional emails with HTML/text content and template variables
-* **Subscriber Commands**: Execute powerful commands like adding/removing tags, managing fields, and subscription status
-* **Email Validation**: Validate email addresses for spam/throwaway detection using Bento's validation service
-* **Security First**: Built-in input validation, HTML sanitization, and secure error handling
-* **Rate Limiting**: Intelligent retry logic with exponential backoff for reliable API communication
+- **Subscriber Management**: Create, update, and retrieve subscriber information with custom fields and tags
+- **Event Tracking**: Track custom events and user behavior for advanced segmentation and automation
+- **Transactional Emails**: Send personalized transactional emails with HTML/text content and template variables
+- **Subscriber Commands**: Execute powerful commands like adding/removing tags, managing fields, and subscription status
+- **Email Validation**: Validate email addresses for spam/throwaway detection using Bento's validation service
+- **Utility Tools**: Run blacklist checks and content moderation via Bento's experimental services
+- **Analytics Insights**: Retrieve site-wide and segment-level performance metrics without leaving n8n
+- **Broadcast Management**: List pending broadcasts and queue sends with safety checks
+- **Security First**: Built-in input validation, HTML sanitization, and secure error handling
+- **Rate Limiting**: Intelligent retry logic with exponential backoff for reliable API communication
 
 ## Requirements
 
@@ -46,7 +49,6 @@ Table of contents
 
 ### Installation
 
-
 #### Option 1: Install via npm (Self-hosted)
 
 If you're running n8n locally or in a self-hosted environment:
@@ -56,10 +58,10 @@ If you're running n8n locally or in a self-hosted environment:
 cd ~/.n8n
 
 # Install the Bento community node
-npm install bento-n8n-sdk
+npm install n8n-nodes-bento
 
 # make sure you symlink the node to the n8n installation directory
-ln -s {Path to bento node install}/bento-n8n-sdk {n8n installation directory}/custom/nodes/bento-n8n-sdk
+ln -s {Path to bento node install}/n8n-nodes-bento {n8n installation directory}/custom/nodes/n8n-nodes-bento
 
 # Restart n8n
 n8n start
@@ -78,20 +80,20 @@ services:
     container_name: n8n
     restart: unless-stopped
     ports:
-      - "5678:5678"
+      - '5678:5678'
     volumes:
       - ./n8n:/home/node/.n8n
     environment:
       - N8N_CUSTOM_EXTENSIONS=/home/node/.n8n/custom/nodes
       - N8N_EDITOR_BASE_URL=http://localhost:5678
       - GENERIC_TIMEZONE=Asia/Tokyo
-    entrypoint: ["/bin/sh", "-c"]
+    entrypoint: ['/bin/sh', '-c']
     command: |
       "set -e
        cd /home/node/.n8n
        mkdir -p custom/nodes
-       npm install bento-n8n-sdk
-       ln -sfn /home/node/.n8n/node_modules/bento-n8n-sdk /home/node/.n8n/custom/nodes/bento-n8n-sdk
+       npm install n8n-nodes-bento
+       ln -sfn /home/node/.n8n/node_modules/n8n-nodes-bento /home/node/.n8n/custom/nodes/n8n-nodes-bento
        exec n8n start"
 ```
 
@@ -126,14 +128,17 @@ The Bento node supports the following operations:
 Add a new subscriber to your Bento audience with email and profile data.
 
 **Required Parameters:**
+
 - **Email**: The subscriber's email address
 
 **Optional Parameters:**
+
 - **First Name**: Subscriber's first name for personalization
-- **Last Name**: Subscriber's last name for personalization  
+- **Last Name**: Subscriber's last name for personalization
 - **Custom Fields**: Additional key-value pairs to store with the subscriber
 
 **Example Use Cases:**
+
 - Add new users from form submissions
 - Import subscribers from external databases
 - Create subscribers from webhook data
@@ -143,12 +148,15 @@ Add a new subscriber to your Bento audience with email and profile data.
 Retrieve detailed information about an existing subscriber by email.
 
 **Required Parameters:**
+
 - **Email**: The subscriber's email address
 
 **Returns:**
+
 - Complete subscriber profile including custom fields, tags, and subscription status
 
 **Example Use Cases:**
+
 - Look up subscriber information before sending personalized content
 - Verify subscriber existence in conditional workflows
 - Retrieve custom field data for personalization
@@ -158,14 +166,17 @@ Retrieve detailed information about an existing subscriber by email.
 Modify subscriber profile information and custom attributes.
 
 **Required Parameters:**
+
 - **Email**: The subscriber's email address
 
 **Optional Parameters:**
+
 - **First Name**: Updated first name
 - **Last Name**: Updated last name
 - **Custom Fields**: Updated or new custom field values
 
 **Example Use Cases:**
+
 - Update subscriber information from CRM changes
 - Add new custom fields based on user behavior
 - Sync subscriber data across platforms
@@ -175,13 +186,16 @@ Modify subscriber profile information and custom attributes.
 Record custom events and behaviors for subscriber segmentation and automation.
 
 **Required Parameters:**
+
 - **User ID**: Unique identifier for the user (typically email address)
 - **Event Name**: Name of the custom event (e.g., "purchase_completed", "page_viewed")
 
 **Optional Parameters:**
+
 - **Event Properties**: Additional key-value pairs with event data
 
 **Example Use Cases:**
+
 - Track purchase events with order details
 - Record page views and user interactions
 - Monitor feature usage and engagement
@@ -192,20 +206,24 @@ Record custom events and behaviors for subscriber segmentation and automation.
 Send personalized transactional emails using HTML or text content.
 
 **Required Parameters:**
+
 - **Recipient Email**: Email address of the recipient
 - **From Email**: Sender email address
 - **Subject**: Email subject line
 - **Email Type**: Choose between HTML or Text format
 
 **Content Parameters:**
+
 - **HTML Body**: HTML content (when Email Type is HTML)
 - **Text Body**: Plain text content (when Email Type is Text)
 
 **Optional Parameters:**
+
 - **Transactional**: Mark as transactional email this ignores if the user has unsubscribed. USE WITH CAUTION!
 - **Personalizations**: Template variables for dynamic content using liquid tags.
 
 **Example Use Cases:**
+
 - Send password reset emails
 - Deliver order confirmations
 - Send welcome emails to new users
@@ -216,10 +234,12 @@ Send personalized transactional emails using HTML or text content.
 Execute commands on subscribers to manage tags, fields, and subscription status.
 
 **Required Parameters:**
+
 - **Email**: The subscriber's email address
 - **Command**: The action to perform
 
 **Available Commands:**
+
 - **Add Tag**: Add a tag to the subscriber
 - **Remove Tag**: Remove a tag from the subscriber
 - **Add Tag via Event**: Add a tag through event tracking
@@ -230,6 +250,7 @@ Execute commands on subscribers to manage tags, fields, and subscription status.
 - **Change Email**: Update the subscriber's email address
 
 **Example Use Cases:**
+
 - Segment subscribers with tags based on behavior
 - Manage subscription preferences
 - Update subscriber data programmatically
@@ -240,20 +261,228 @@ Execute commands on subscribers to manage tags, fields, and subscription status.
 Validate email addresses for spam/throwaway detection using Bento's validation service.
 
 **Required Parameters:**
+
 - **Email**: The email address to validate
 
 **Optional Parameters:**
+
 - **Name**: Associated name (improves validation accuracy)
 - **IP Address**: Associated IP address (improves validation accuracy)
 
 **Returns:**
+
 - Validation results including deliverability score and risk assessment
 
 **Example Use Cases:**
+
 - Filter out invalid emails before adding subscribers
 - Prevent spam signups
 - Improve email deliverability rates
 - Validate email quality in real-time
+
+### Blacklist Check
+
+Evaluate whether an email address appears on Bento's blacklist service.
+
+**Required Parameters:**
+
+- **Email**: The email address to evaluate
+
+**Optional Parameters:**
+
+- **First Name / Last Name**: Supplementary profile data to improve match confidence
+- **IP Address**: Associated IP address for additional scoring context
+
+**Returns:**
+
+- Blacklist verdict along with match confidence and reason codes
+
+**Example Use Cases:**
+
+- Prevent sending to high-risk or known abusive addresses
+- Screen manual imports before adding to automations
+- Review lead sources for potential fraud signals
+
+### Content Moderation
+
+Submit freeform text to Bento's moderation service for policy evaluation.
+
+**Required Parameters:**
+
+- **Content**: The text body you want to review
+
+**Optional Parameters:**
+
+- **Metadata**: Key/value descriptors such as source, campaign, or language
+
+**Returns:**
+
+- Moderation verdicts, confidence scores, and flagged categories
+
+**Example Use Cases:**
+
+- Review user-generated content before publishing or emailing
+- Flag risky support tickets for manual review
+- Audit campaign content for compliance keywords
+
+### Gender Guess
+
+Predict the likely gender associated with a subscriber using Bento's experimental classifier.
+
+**Required Parameters:**
+
+- At least one of **Email**, **First Name**, or **Last Name**
+
+**Optional Parameters:**
+
+- Provide combinations of email and names to increase prediction accuracy
+
+**Returns:**
+
+- Predicted gender label along with confidence scores
+
+**Example Use Cases:**
+
+- Tailor messaging tone dynamically
+- Enrich CRM profiles with probabilistic attributes
+- Flag low-confidence guesses for manual review
+
+### Geolocation Lookup
+
+Retrieve geolocation metadata for a subscriber's IP address.
+
+**Required Parameters:**
+
+- **IP Address**: The address to evaluate
+
+**Optional Parameters:**
+
+- **User Agent**: Provide a user agent string for additional look-up context
+
+**Returns:**
+
+- Location details (country, region, city) plus related metadata
+
+**Example Use Cases:**
+
+- Enrich analytics dashboards with regional context
+- Detect mismatched login locations for security checks
+- Personalize offers based on detected location
+
+### Site Metrics
+
+Pull site-wide performance metrics across a configurable date range.
+
+**Required Parameters:**
+
+- **Date Range**: Choose from Last 7 Days, Last 30 Days, or a custom window
+
+**Optional Parameters:**
+
+- **Start/End Date**: Only when using the Custom range
+- **Include Inactive Subscribers**: Toggle to include unsubscribed or inactive contacts
+
+**Returns:**
+
+- Aggregated totals for subscriber counts and engagement data
+
+**Example Use Cases:**
+
+- Monitor high-level list growth week over week
+- Compare subscriber activity across monthly windows
+- Share snapshot summaries with stakeholders
+
+### Segment Metrics
+
+Measure engagement for a specific Bento segment.
+
+**Required Parameters:**
+
+- **Segment ID**: Identifier of the segment to analyze
+- **Date Range**: Choose a preset or custom window
+
+**Optional Parameters:**
+
+- **Start/End Date**: Only required when using a custom range
+
+**Returns:**
+
+- Subscriber counts and engagement totals (opens, clicks, unsubscribes) scoped to the segment
+
+**Example Use Cases:**
+
+- Evaluate segment performance before launching automation
+- Compare engagement across high-value cohorts
+- Spot drop-offs in segment engagement over time
+
+### Report Metrics
+
+Collect high-level reports for broadcasts, automations, or revenue.
+
+**Required Parameters:**
+
+- **Report Type**: Select Broadcast, Automation, or Revenue
+- **Broadcast/Automation ID**: Required when the corresponding type is selected
+- **Date Range**: Choose from presets or supply a custom window
+
+**Returns:**
+
+- Aggregated metrics such as sends, opens, clicks, conversions, and revenue (when available)
+
+**Example Use Cases:**
+
+- Summarize broadcast performance for stakeholders
+- Track automation effectiveness over specific windows
+- Monitor revenue generated from email activity
+
+### List Broadcasts
+
+Retrieve Bento broadcasts with optional filtering.
+
+**Optional Parameters:**
+
+- **Status**: Limit results to drafts, scheduled, sending, sent, or archived broadcasts
+- **Created After**: Only return broadcasts created after a specific date
+- **Tag IDs**: Filter broadcasts linked to particular tags
+
+**Returns:**
+
+- Broadcast objects along with a summary that includes total items and scheduled count
+
+**Example Use Cases:**
+
+- Review scheduled broadcasts before deploying
+- Audit campaigns tied to certain tags
+- Build dashboards of historical broadcast activity
+
+### Send Broadcast
+
+Queue a draft broadcast for immediate or scheduled delivery.
+
+> [!WARNING]
+> This action requires enabling **Confirm Send** to avoid accidental sends. Failing to confirm will block execution.
+
+**Required Parameters:**
+
+- **Broadcast ID**: Identifier of the draft broadcast
+- **Audience**: All subscribers, a segment, or specific tags
+- **Send Timing**: Immediate or scheduled
+
+**Optional Parameters:**
+
+- **Subject Override**: Replace the stored subject line
+- **Segment/Tag IDs**: Provide when targeting a subset
+- **Scheduled Send Time**: Required when using scheduled timing
+
+**Returns:**
+
+- API response payload including any partial failure errors surfaced by Bento
+
+**Example Use Cases:**
+
+- Schedule a broadcast directly from an automation workflow
+- Target broadcasts to high-value segments or tagged cohorts
+- Trigger emergency messages while enforcing a confirmation gate
 
 ## Things to Know
 
@@ -281,6 +510,7 @@ Validate email addresses for spam/throwaway detection using Bento's validation s
 ### API Endpoints Used
 
 The node uses the following Bento API endpoints:
+
 - `POST /api/v1/batch/events` - For creating subscribers and tracking events
 - `GET /api/v1/fetch/subscribers` - For retrieving subscriber information
 - `POST /api/v1/batch/subscribers` - For updating subscriber information
@@ -317,22 +547,26 @@ We welcome contributions! Please see our [contributing guidelines](CODE_OF_CONDU
 ### Development Setup
 
 1. Clone the repository:
+
    ```bash
    git clone https://github.com/bentonow/bento-n8n-sdk.git
    cd bento-n8n-sdk
    ```
 
 2. Install dependencies:
+
    ```bash
    npm install
    ```
 
 3. Build the project:
+
    ```bash
    npm run build
    ```
 
 4. Run linting:
+
    ```bash
    npm run lint
    ```
@@ -341,7 +575,7 @@ We welcome contributions! Please see our [contributing guidelines](CODE_OF_CONDU
    ```bash
    npm link
    cd ~/.n8n
-   npm link bento-n8n-sdk
+   npm link n8n-nodes-bento
    ```
 
 ## License

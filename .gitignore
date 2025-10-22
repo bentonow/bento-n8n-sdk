@@ -1,8 +1,10 @@
 node_modules/
+.idea/
 .DS_Store
 .tmp/
 tmp/
 npm-debug.log*
 yarn.lock
+*.tsbuildinfo
 .vscode/
 !dist/
