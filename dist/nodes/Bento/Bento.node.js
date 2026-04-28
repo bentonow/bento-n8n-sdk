@@ -6,7 +6,9 @@ const buffer_1 = require("buffer");
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
 const INPUT_LIMITS = {
     EMAIL: 254,
+    RESOURCE_ID: 100,
     NAME: 50,
+    TAG_NAME: 100,
     SUBJECT: 200,
     CUSTOM_FIELD_KEY: 50,
     CUSTOM_FIELD_VALUE: 500,
@@ -14,6 +16,7 @@ const INPUT_LIMITS = {
     EVENT_PROPERTY_KEY: 50,
     EVENT_PROPERTY_VALUE: 500,
     HTML_CONTENT: 50000,
+    INBOX_SNIPPET: 500,
     TEXT_CONTENT: 50000,
     USER_ID: 254,
     IP_ADDRESS: 45,
@@ -34,6 +37,19 @@ const DANGEROUS_HTML_PATTERNS = [
     /<link\b[^>]*>/gi,
     /data:(?!image\/)/gi,
     /<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi,
+];
+const DANGEROUS_TEMPLATE_HTML_PATTERNS = [
+    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
+    /javascript:/gi,
+    /on\w+\s*=/gi,
+    /<iframe\b[^>]*>/gi,
+    /<object\b[^>]*>/gi,
+    /<embed\b[^>]*>/gi,
+    /<form\b[^>]*>/gi,
+    /<input\b[^>]*>/gi,
+    /<meta\b[^>]*>/gi,
+    /<link\b[^>]*>/gi,
+    /data:(?!image\/)/gi,
 ];
 const SECURE_ERROR_MESSAGES = {
     AUTHENTICATION_FAILED: 'Authentication failed. Please check your Bento API credentials.',
@@ -125,6 +141,31 @@ function sanitizeHtmlContent(html) {
     sanitized = sanitized.replace(/data\s*:/gi, '');
     return sanitized;
 }
+function validateTemplateHtmlContent(html) {
+    if (typeof html !== 'string') {
+        return false;
+    }
+    for (const pattern of DANGEROUS_TEMPLATE_HTML_PATTERNS) {
+        const regex = new RegExp(pattern.source, pattern.flags);
+        if (regex.test(html)) {
+            return false;
+        }
+    }
+    return true;
+}
+function sanitizeTemplateHtmlContent(html) {
+    if (typeof html !== 'string') {
+        return '';
+    }
+    let sanitized = html.trim();
+    for (const pattern of DANGEROUS_TEMPLATE_HTML_PATTERNS) {
+        const regex = new RegExp(pattern.source, pattern.flags);
+        sanitized = sanitized.replace(regex, '');
+    }
+    sanitized = sanitized.replace(/javascript\s*:/gi, '');
+    sanitized = sanitized.replace(/vbscript\s*:/gi, '');
+    return sanitized;
+}
 function validateHtmlStructure(html) {
     const issues = [];
     if (typeof html !== 'string') {
@@ -163,6 +204,12 @@ function validateInputLength(input, maxLength, fieldName, itemIndex) {
     if (typeof input === 'string' && input.length > maxLength) {
         throw new n8n_workflow_1.NodeOperationError(this.getNode(), `${fieldName} exceeds maximum length of ${maxLength} characters (current: ${input.length})`, { itemIndex });
     }
+}
+function validatePositiveIntegerInput(input, fieldName, itemIndex) {
+    if (!Number.isFinite(input) || input <= 0 || !Number.isInteger(input)) {
+        throw new n8n_workflow_1.NodeOperationError(this.getNode(), `${fieldName} must be a positive whole number`, { itemIndex });
+    }
+    return input;
 }
 function createSecureErrorMessage(error, operation) {
     if (error.statusCode) {
@@ -306,10 +353,28 @@ class Bento {
                             action: 'Moderate content',
                         },
                         {
+                            name: 'Create Field',
+                            value: 'createField',
+                            description: 'Create a Bento custom field definition',
+                            action: 'Create a field',
+                        },
+                        {
+                            name: 'Create Sequence Email',
+                            value: 'createSequenceEmail',
+                            description: 'Add a new email template to an existing Bento sequence',
+                            action: 'Create a sequence email',
+                        },
+                        {
                             name: 'Create Subscriber',
                             value: 'createSubscriber',
                             description: 'Add a new subscriber to your Bento audience with email and profile data',
                             action: 'Create a subscriber',
+                        },
+                        {
+                            name: 'Create Tag',
+                            value: 'createTag',
+                            description: 'Create a Bento tag for audience segmentation',
+                            action: 'Create a tag',
                         },
                         {
                             name: 'Gender Guess',
@@ -324,6 +389,12 @@ class Bento {
                             action: 'Look up geolocation',
                         },
                         {
+                            name: 'Get Email Template',
+                            value: 'getEmailTemplate',
+                            description: 'Fetch a Bento email template by ID',
+                            action: 'Get an email template',
+                        },
+                        {
                             name: 'Get Subscriber',
                             value: 'getSubscriber',
                             description: 'Retrieve detailed information about an existing subscriber by email',
@@ -334,6 +405,30 @@ class Bento {
                             value: 'listBroadcasts',
                             description: 'List Bento broadcasts with optional filters',
                             action: 'List broadcasts',
+                        },
+                        {
+                            name: 'List Fields',
+                            value: 'listFields',
+                            description: 'List Bento custom fields for the current site',
+                            action: 'List fields',
+                        },
+                        {
+                            name: 'List Sequences',
+                            value: 'listSequences',
+                            description: 'List Bento sequences, including their embedded email templates',
+                            action: 'List sequences',
+                        },
+                        {
+                            name: 'List Tags',
+                            value: 'listTags',
+                            description: 'List Bento tags available for the current site',
+                            action: 'List tags',
+                        },
+                        {
+                            name: 'List Workflows',
+                            value: 'listWorkflows',
+                            description: 'List Bento workflows and their embedded email templates',
+                            action: 'List workflows',
                         },
                         {
                             name: 'Report Metrics',
@@ -376,6 +471,12 @@ class Bento {
                             value: 'trackEvent',
                             description: 'Record custom events and behaviors for subscriber segmentation and automation',
                             action: 'Track an event',
+                        },
+                        {
+                            name: 'Update Email Template',
+                            value: 'updateEmailTemplate',
+                            description: 'Update a Bento email template\'s subject and/or HTML',
+                            action: 'Update an email template',
                         },
                         {
                             name: 'Update Subscriber',
@@ -470,6 +571,269 @@ class Bento {
                         },
                     ],
                     description: 'Additional custom fields to store with the subscriber',
+                },
+                {
+                    displayName: 'Page',
+                    name: 'listSequencesPage',
+                    type: 'number',
+                    typeOptions: {
+                        minValue: 1,
+                    },
+                    displayOptions: {
+                        show: {
+                            operation: ['listSequences'],
+                        },
+                    },
+                    default: 1,
+                    description: 'Page number of sequences to retrieve',
+                },
+                {
+                    displayName: 'Sequence ID',
+                    name: 'createSequenceEmailSequenceId',
+                    type: 'string',
+                    required: true,
+                    displayOptions: {
+                        show: {
+                            operation: ['createSequenceEmail'],
+                        },
+                    },
+                    default: '',
+                    placeholder: 'seq_12345',
+                    description: 'Identifier of the Bento sequence that should receive the new email template',
+                },
+                {
+                    displayName: 'Subject',
+                    name: 'createSequenceEmailSubject',
+                    type: 'string',
+                    required: true,
+                    displayOptions: {
+                        show: {
+                            operation: ['createSequenceEmail'],
+                        },
+                    },
+                    default: '',
+                    placeholder: 'Welcome to the sequence',
+                    description: 'Subject line for the sequence email',
+                },
+                {
+                    displayName: 'HTML',
+                    name: 'createSequenceEmailHtml',
+                    type: 'string',
+                    typeOptions: {
+                        rows: 8,
+                    },
+                    required: true,
+                    displayOptions: {
+                        show: {
+                            operation: ['createSequenceEmail'],
+                        },
+                    },
+                    default: '',
+                    placeholder: '<p>Thanks for joining {{ first_name }}</p>',
+                    description: 'HTML body for the sequence email template',
+                },
+                {
+                    displayName: 'Inbox Snippet',
+                    name: 'createSequenceEmailInboxSnippet',
+                    type: 'string',
+                    displayOptions: {
+                        show: {
+                            operation: ['createSequenceEmail'],
+                        },
+                    },
+                    default: '',
+                    placeholder: 'Preview text shown in inboxes',
+                    description: 'Optional preheader text shown in supported inboxes',
+                },
+                {
+                    displayName: 'Delay Interval',
+                    name: 'createSequenceEmailDelayInterval',
+                    type: 'options',
+                    displayOptions: {
+                        show: {
+                            operation: ['createSequenceEmail'],
+                        },
+                    },
+                    options: [
+                        {
+                            name: 'Days',
+                            value: 'days',
+                        },
+                        {
+                            name: 'Hours',
+                            value: 'hours',
+                        },
+                        {
+                            name: 'Minutes',
+                            value: 'minutes',
+                        },
+                        {
+                            name: 'Months',
+                            value: 'months',
+                        },
+                        {
+                            name: 'None',
+                            value: '',
+                        },
+                    ],
+                    default: '',
+                    description: 'Optional delay unit before Bento sends this sequence email',
+                },
+                {
+                    displayName: 'Delay Interval Count',
+                    name: 'createSequenceEmailDelayIntervalCount',
+                    type: 'number',
+                    typeOptions: {
+                        minValue: 1,
+                    },
+                    displayOptions: {
+                        show: {
+                            operation: ['createSequenceEmail'],
+                            createSequenceEmailDelayInterval: ['minutes', 'hours', 'days', 'months'],
+                        },
+                    },
+                    default: 1,
+                    description: 'Delay count to pair with the selected delay interval',
+                },
+                {
+                    displayName: 'Editor Choice',
+                    name: 'createSequenceEmailEditorChoice',
+                    type: 'string',
+                    displayOptions: {
+                        show: {
+                            operation: ['createSequenceEmail'],
+                        },
+                    },
+                    default: '',
+                    placeholder: 'classic',
+                    description: 'Optional editor mode to use when Bento stores the template',
+                },
+                {
+                    displayName: 'To',
+                    name: 'createSequenceEmailTo',
+                    type: 'string',
+                    displayOptions: {
+                        show: {
+                            operation: ['createSequenceEmail'],
+                        },
+                    },
+                    default: '',
+                    placeholder: 'subscriber@example.com',
+                    description: 'Optional To header override used by Bento for the email template',
+                },
+                {
+                    displayName: 'CC',
+                    name: 'createSequenceEmailCc',
+                    type: 'string',
+                    displayOptions: {
+                        show: {
+                            operation: ['createSequenceEmail'],
+                        },
+                    },
+                    default: '',
+                    placeholder: 'team@example.com',
+                    description: 'Optional CC header value for the email template',
+                },
+                {
+                    displayName: 'BCC',
+                    name: 'createSequenceEmailBcc',
+                    type: 'string',
+                    displayOptions: {
+                        show: {
+                            operation: ['createSequenceEmail'],
+                        },
+                    },
+                    default: '',
+                    placeholder: 'audit@example.com',
+                    description: 'Optional BCC header value for the email template',
+                },
+                {
+                    displayName: 'Page',
+                    name: 'listWorkflowsPage',
+                    type: 'number',
+                    typeOptions: {
+                        minValue: 1,
+                    },
+                    displayOptions: {
+                        show: {
+                            operation: ['listWorkflows'],
+                        },
+                    },
+                    default: 1,
+                    description: 'Page number of workflows to retrieve',
+                },
+                {
+                    displayName: 'Template ID',
+                    name: 'emailTemplateId',
+                    type: 'number',
+                    typeOptions: {
+                        minValue: 1,
+                    },
+                    required: true,
+                    displayOptions: {
+                        show: {
+                            operation: ['getEmailTemplate', 'updateEmailTemplate'],
+                        },
+                    },
+                    default: 1,
+                    description: 'Numeric identifier of the Bento email template',
+                },
+                {
+                    displayName: 'Subject',
+                    name: 'updateEmailTemplateSubject',
+                    type: 'string',
+                    displayOptions: {
+                        show: {
+                            operation: ['updateEmailTemplate'],
+                        },
+                    },
+                    default: '',
+                    placeholder: 'Updated subject line',
+                    description: 'Optional replacement subject line for the email template',
+                },
+                {
+                    displayName: 'HTML',
+                    name: 'updateEmailTemplateHtml',
+                    type: 'string',
+                    typeOptions: {
+                        rows: 8,
+                    },
+                    displayOptions: {
+                        show: {
+                            operation: ['updateEmailTemplate'],
+                        },
+                    },
+                    default: '',
+                    placeholder: '<p>Updated HTML content</p>',
+                    description: 'Optional replacement HTML for the email template',
+                },
+                {
+                    displayName: 'Field Key',
+                    name: 'createFieldKey',
+                    type: 'string',
+                    required: true,
+                    displayOptions: {
+                        show: {
+                            operation: ['createField'],
+                        },
+                    },
+                    default: '',
+                    placeholder: 'company',
+                    description: 'Unique field key to create in Bento',
+                },
+                {
+                    displayName: 'Tag Name',
+                    name: 'createTagName',
+                    type: 'string',
+                    required: true,
+                    displayOptions: {
+                        show: {
+                            operation: ['createTag'],
+                        },
+                    },
+                    default: '',
+                    placeholder: 'vip_customer',
+                    description: 'Name of the Bento tag to create',
                 },
                 {
                     displayName: 'User ID',
@@ -856,7 +1220,6 @@ class Bento {
                     displayName: 'Domain',
                     name: 'blacklistDomain',
                     type: 'string',
-                    required: true,
                     displayOptions: {
                         show: {
                             operation: ['blacklistCheck'],
@@ -864,7 +1227,7 @@ class Bento {
                     },
                     default: '',
                     placeholder: 'test.com',
-                    description: 'Domain to evaluate against Bento\'s blacklist service',
+                    description: 'Domain to evaluate against Bento\'s blacklist service. Provide either a domain, an IP, or both.',
                 },
                 {
                     displayName: 'IP Address',
@@ -877,7 +1240,7 @@ class Bento {
                     },
                     default: '',
                     placeholder: '123.45.67.89',
-                    description: 'Optional IP address to include in the blacklist evaluation',
+                    description: 'Optional IP address to evaluate. Provide either an IP, a domain, or both.',
                 },
                 {
                     displayName: 'Content',
@@ -1282,7 +1645,7 @@ class Bento {
         };
     }
     async execute() {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2, _3, _4, _5;
         const items = this.getInputData();
         const returnData = [];
         for (let i = 0; i < items.length; i++) {
@@ -1290,6 +1653,134 @@ class Bento {
                 const operation = this.getNodeParameter('operation', i);
                 let responseData;
                 switch (operation) {
+                    case 'createField': {
+                        const fieldKey = (this.getNodeParameter('createFieldKey', i) || '').trim();
+                        validateInputLength.call(this, fieldKey, INPUT_LIMITS.CUSTOM_FIELD_KEY, 'Field Key', i);
+                        if (!fieldKey) {
+                            throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'Field key is required for field creation', {
+                                itemIndex: i,
+                            });
+                        }
+                        try {
+                            const response = await makeBentoRequest.call(this, 'POST', '/api/v1/fetch/fields', {
+                                field: {
+                                    key: fieldKey,
+                                },
+                            }, i);
+                            responseData = {
+                                operation: 'createField',
+                                success: true,
+                                fieldKey,
+                                fields: Array.isArray(response === null || response === void 0 ? void 0 : response.data) ? response.data : undefined,
+                                apiResponse: response,
+                                message: 'Field created successfully',
+                            };
+                        }
+                        catch (error) {
+                            logSecureError.call(this, error, 'createField', { itemIndex: i });
+                            responseData = {
+                                operation: 'createField',
+                                success: false,
+                                fieldKey: fieldKey || undefined,
+                                error: createSecureErrorMessage(error, 'createField'),
+                                message: 'Failed to create field. Check the field key and credentials, then try again.',
+                            };
+                        }
+                        break;
+                    }
+                    case 'createSequenceEmail': {
+                        const sequenceId = (this.getNodeParameter('createSequenceEmailSequenceId', i) || '').trim();
+                        const subject = (this.getNodeParameter('createSequenceEmailSubject', i) || '').trim();
+                        const htmlInput = this.getNodeParameter('createSequenceEmailHtml', i) || '';
+                        const inboxSnippet = (this.getNodeParameter('createSequenceEmailInboxSnippet', i) || '').trim();
+                        const delayInterval = this.getNodeParameter('createSequenceEmailDelayInterval', i) || '';
+                        const delayIntervalCount = this.getNodeParameter('createSequenceEmailDelayIntervalCount', i);
+                        const editorChoice = (this.getNodeParameter('createSequenceEmailEditorChoice', i) || '').trim();
+                        const to = (this.getNodeParameter('createSequenceEmailTo', i) || '').trim();
+                        const cc = (this.getNodeParameter('createSequenceEmailCc', i) || '').trim();
+                        const bcc = (this.getNodeParameter('createSequenceEmailBcc', i) || '').trim();
+                        validateInputLength.call(this, sequenceId, INPUT_LIMITS.RESOURCE_ID, 'Sequence ID', i);
+                        validateInputLength.call(this, subject, INPUT_LIMITS.SUBJECT, 'Subject', i);
+                        validateInputLength.call(this, htmlInput, INPUT_LIMITS.HTML_CONTENT, 'HTML', i);
+                        validateInputLength.call(this, inboxSnippet, INPUT_LIMITS.INBOX_SNIPPET, 'Inbox Snippet', i);
+                        validateInputLength.call(this, editorChoice, INPUT_LIMITS.VALIDATE_NAME, 'Editor Choice', i);
+                        validateInputLength.call(this, to, INPUT_LIMITS.CUSTOM_FIELD_VALUE, 'To', i);
+                        validateInputLength.call(this, cc, INPUT_LIMITS.CUSTOM_FIELD_VALUE, 'CC', i);
+                        validateInputLength.call(this, bcc, INPUT_LIMITS.CUSTOM_FIELD_VALUE, 'BCC', i);
+                        if (!sequenceId) {
+                            throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'Sequence ID is required for creating a sequence email', {
+                                itemIndex: i,
+                            });
+                        }
+                        if (!subject) {
+                            throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'Subject is required for creating a sequence email', {
+                                itemIndex: i,
+                            });
+                        }
+                        if (!htmlInput.trim()) {
+                            throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'HTML is required for creating a sequence email', {
+                                itemIndex: i,
+                            });
+                        }
+                        const html = sanitizeTemplateHtmlContent(htmlInput);
+                        if (!html) {
+                            throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'HTML is empty after sanitization', {
+                                itemIndex: i,
+                            });
+                        }
+                        if (!validateTemplateHtmlContent(html)) {
+                            throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'HTML contains unsupported or unsafe content', {
+                                itemIndex: i,
+                            });
+                        }
+                        const emailTemplatePayload = {
+                            subject,
+                            html,
+                        };
+                        if (inboxSnippet) {
+                            emailTemplatePayload.inbox_snippet = inboxSnippet;
+                        }
+                        if (delayInterval) {
+                            emailTemplatePayload.delay_interval = delayInterval;
+                            emailTemplatePayload.delay_interval_count = validatePositiveIntegerInput.call(this, delayIntervalCount, 'Delay Interval Count', i);
+                        }
+                        if (editorChoice) {
+                            emailTemplatePayload.editor_choice = editorChoice;
+                        }
+                        if (to) {
+                            emailTemplatePayload.to = to;
+                        }
+                        if (cc) {
+                            emailTemplatePayload.cc = cc;
+                        }
+                        if (bcc) {
+                            emailTemplatePayload.bcc = bcc;
+                        }
+                        try {
+                            const response = await makeBentoRequest.call(this, 'POST', `/api/v1/fetch/sequences/${encodeURIComponent(sequenceId)}/emails/templates`, {
+                                email_template: emailTemplatePayload,
+                            }, i);
+                            responseData = {
+                                operation: 'createSequenceEmail',
+                                success: true,
+                                sequenceId,
+                                emailTemplate: (_a = response === null || response === void 0 ? void 0 : response.data) !== null && _a !== void 0 ? _a : response,
+                                apiResponse: response,
+                                message: 'Sequence email created successfully',
+                            };
+                        }
+                        catch (error) {
+                            logSecureError.call(this, error, 'createSequenceEmail', { itemIndex: i });
+                            responseData = {
+                                operation: 'createSequenceEmail',
+                                success: false,
+                                sequenceId: sequenceId || undefined,
+                                error: createSecureErrorMessage(error, 'createSequenceEmail'),
+                                message: 'Failed to create sequence email. Review the sequence ID and template fields, then try again.',
+                            };
+                        }
+                        break;
+                    }
                     case 'createSubscriber': {
                         const email = sanitizeEmail(this.getNodeParameter('email', i));
                         const firstName = this.getNodeParameter('firstName', i);
@@ -1356,6 +1847,66 @@ class Bento {
                                 },
                                 error: createSecureErrorMessage(error, 'createSubscriber'),
                                 message: 'Failed to create subscriber. Please check your credentials and input data.',
+                            };
+                        }
+                        break;
+                    }
+                    case 'createTag': {
+                        const tagName = (this.getNodeParameter('createTagName', i) || '').trim();
+                        validateInputLength.call(this, tagName, INPUT_LIMITS.TAG_NAME, 'Tag Name', i);
+                        if (!tagName) {
+                            throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'Tag name is required for tag creation', {
+                                itemIndex: i,
+                            });
+                        }
+                        try {
+                            const response = await makeBentoRequest.call(this, 'POST', '/api/v1/fetch/tags', {
+                                tag: {
+                                    name: tagName,
+                                },
+                            }, i);
+                            responseData = {
+                                operation: 'createTag',
+                                success: true,
+                                tagName,
+                                tags: Array.isArray(response === null || response === void 0 ? void 0 : response.data) ? response.data : undefined,
+                                apiResponse: response,
+                                message: 'Tag created successfully',
+                            };
+                        }
+                        catch (error) {
+                            logSecureError.call(this, error, 'createTag', { itemIndex: i });
+                            responseData = {
+                                operation: 'createTag',
+                                success: false,
+                                tagName: tagName || undefined,
+                                error: createSecureErrorMessage(error, 'createTag'),
+                                message: 'Failed to create tag. Check the tag name and credentials, then try again.',
+                            };
+                        }
+                        break;
+                    }
+                    case 'getEmailTemplate': {
+                        const templateId = validatePositiveIntegerInput.call(this, this.getNodeParameter('emailTemplateId', i), 'Template ID', i);
+                        try {
+                            const response = await makeBentoRequest.call(this, 'GET', `/api/v1/fetch/emails/templates/${templateId}`, undefined, i);
+                            responseData = {
+                                operation: 'getEmailTemplate',
+                                success: true,
+                                templateId,
+                                emailTemplate: (_b = response === null || response === void 0 ? void 0 : response.data) !== null && _b !== void 0 ? _b : response,
+                                apiResponse: response,
+                                message: 'Email template retrieved successfully',
+                            };
+                        }
+                        catch (error) {
+                            logSecureError.call(this, error, 'getEmailTemplate', { itemIndex: i });
+                            responseData = {
+                                operation: 'getEmailTemplate',
+                                success: false,
+                                templateId,
+                                error: createSecureErrorMessage(error, 'getEmailTemplate'),
+                                message: 'Failed to retrieve email template. Verify the template ID and try again.',
                             };
                         }
                         break;
@@ -1762,6 +2313,60 @@ class Bento {
                         }
                         break;
                     }
+                    case 'updateEmailTemplate': {
+                        const templateId = validatePositiveIntegerInput.call(this, this.getNodeParameter('emailTemplateId', i), 'Template ID', i);
+                        const subject = (this.getNodeParameter('updateEmailTemplateSubject', i) || '').trim();
+                        const htmlInput = this.getNodeParameter('updateEmailTemplateHtml', i) || '';
+                        validateInputLength.call(this, subject, INPUT_LIMITS.SUBJECT, 'Subject', i);
+                        validateInputLength.call(this, htmlInput, INPUT_LIMITS.HTML_CONTENT, 'HTML', i);
+                        if (!subject && !htmlInput.trim()) {
+                            throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'Provide at least a subject or HTML value to update the email template', {
+                                itemIndex: i,
+                            });
+                        }
+                        const updatePayload = {};
+                        if (subject) {
+                            updatePayload.subject = subject;
+                        }
+                        if (htmlInput.trim()) {
+                            const html = sanitizeTemplateHtmlContent(htmlInput);
+                            if (!html) {
+                                throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'HTML is empty after sanitization', {
+                                    itemIndex: i,
+                                });
+                            }
+                            if (!validateTemplateHtmlContent(html)) {
+                                throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'HTML contains unsupported or unsafe content', {
+                                    itemIndex: i,
+                                });
+                            }
+                            updatePayload.html = html;
+                        }
+                        try {
+                            const response = await makeBentoRequest.call(this, 'PATCH', `/api/v1/fetch/emails/templates/${templateId}`, {
+                                email_template: updatePayload,
+                            }, i);
+                            responseData = {
+                                operation: 'updateEmailTemplate',
+                                success: true,
+                                templateId,
+                                emailTemplate: (_c = response === null || response === void 0 ? void 0 : response.data) !== null && _c !== void 0 ? _c : response,
+                                apiResponse: response,
+                                message: 'Email template updated successfully',
+                            };
+                        }
+                        catch (error) {
+                            logSecureError.call(this, error, 'updateEmailTemplate', { itemIndex: i });
+                            responseData = {
+                                operation: 'updateEmailTemplate',
+                                success: false,
+                                templateId,
+                                error: createSecureErrorMessage(error, 'updateEmailTemplate'),
+                                message: 'Failed to update email template. Review the template ID and provided fields, then try again.',
+                            };
+                        }
+                        break;
+                    }
                     case 'validateEmail': {
                         const email = sanitizeEmail(this.getNodeParameter('validateEmail', i));
                         const name = this.getNodeParameter('validateName', i);
@@ -1816,26 +2421,49 @@ class Bento {
                     }
                     case 'blacklistCheck': {
                         const domainInput = this.getNodeParameter('blacklistDomain', i);
-                        const domain = typeof domainInput === 'string' ? domainInput.trim() : '';
                         const ipInput = this.getNodeParameter('blacklistIp', i);
-                        const ip = typeof ipInput === 'string' ? ipInput.trim() : '';
+                        const trimmedDomainRaw = typeof domainInput === 'string' ? domainInput.trim() : '';
+                        const trimmedIp = typeof ipInput === 'string' ? ipInput.trim() : '';
+                        const trimmedDomain = trimmedDomainRaw.toLowerCase();
+                        const hasDomain = trimmedDomainRaw !== '';
+                        const hasIp = trimmedIp !== '';
                         try {
-                            const initialContext = {
-                                itemIndex: i,
-                                domain,
-                                ip: ip || undefined,
-                            };
-                            const context = await runPipeline(this, initialContext, [
-                                validateBlacklistInputAction,
-                                buildBlacklistEndpointAction,
-                                executeBlacklistRequestAction,
-                            ]);
+                            if (!hasDomain && !hasIp) {
+                                throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'Provide at least a domain or an IP address for blacklist checks', {
+                                    itemIndex: i,
+                                });
+                            }
+                            if (hasDomain && trimmedDomain.length > 253) {
+                                throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'Domain exceeds maximum length of 253 characters', {
+                                    itemIndex: i,
+                                });
+                            }
+                            if (hasDomain) {
+                                const domainPattern = /^(?!-)(?:[a-zA-Z0-9-]{0,62}[a-zA-Z0-9]\.)+[A-Za-z]{2,}$/;
+                                if (!domainPattern.test(trimmedDomain)) {
+                                    throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'Domain format is invalid', {
+                                        itemIndex: i,
+                                    });
+                                }
+                            }
+                            if (trimmedIp) {
+                                validateInputLength.call(this, trimmedIp, INPUT_LIMITS.IP_ADDRESS, 'IP Address', i);
+                            }
+                            const params = new URLSearchParams();
+                            if (hasDomain) {
+                                params.append('domain', trimmedDomain);
+                            }
+                            if (trimmedIp) {
+                                params.append('ip', trimmedIp);
+                            }
+                            const endpoint = `/api/v1/experimental/blacklist?${params.toString()}`;
+                            const apiResponse = await makeBentoRequest.call(this, 'GET', endpoint, undefined, i);
                             responseData = {
                                 operation: 'blacklistCheck',
                                 success: true,
-                                domain: context.domain,
-                                ip: context.ip || undefined,
-                                apiResponse: context.response,
+                                domain: hasDomain ? trimmedDomain : undefined,
+                                ip: trimmedIp || undefined,
+                                apiResponse,
                                 message: 'Blacklist check completed successfully',
                             };
                         }
@@ -1844,8 +2472,8 @@ class Bento {
                             responseData = {
                                 operation: 'blacklistCheck',
                                 success: false,
-                                domain,
-                                ip: ip || undefined,
+                                domain: hasDomain ? trimmedDomain : undefined,
+                                ip: trimmedIp || undefined,
                                 error: createSecureErrorMessage(error, 'blacklistCheck'),
                                 message: 'Failed to run blacklist check. Please verify the domain and try again.',
                             };
@@ -1859,7 +2487,7 @@ class Bento {
                             const initialContext = {
                                 itemIndex: i,
                                 content,
-                                metadataPairs: (_a = metadataCollection === null || metadataCollection === void 0 ? void 0 : metadataCollection.metadata) !== null && _a !== void 0 ? _a : [],
+                                metadataPairs: (_d = metadataCollection === null || metadataCollection === void 0 ? void 0 : metadataCollection.metadata) !== null && _d !== void 0 ? _d : [],
                             };
                             const context = await runPipeline(this, initialContext, [
                                 validateContentModerationAction,
@@ -1918,7 +2546,7 @@ class Bento {
                                 firstName: context.firstName || undefined,
                                 lastName: context.lastName || undefined,
                                 apiResponse: context.response,
-                                summary: ((_b = context.response) === null || _b === void 0 ? void 0 : _b.prediction)
+                                summary: ((_e = context.response) === null || _e === void 0 ? void 0 : _e.prediction)
                                     ? {
                                         gender: context.response.prediction,
                                         confidence: context.response.confidence,
@@ -1960,7 +2588,7 @@ class Bento {
                                 ip: context.ip,
                                 userAgent: context.userAgent || undefined,
                                 apiResponse: context.response,
-                                location: ((_c = context.response) === null || _c === void 0 ? void 0 : _c.location) || ((_d = context.response) === null || _d === void 0 ? void 0 : _d.data),
+                                location: ((_f = context.response) === null || _f === void 0 ? void 0 : _f.location) || ((_g = context.response) === null || _g === void 0 ? void 0 : _g.data),
                                 message: 'Geolocation lookup completed successfully',
                             };
                         }
@@ -1976,6 +2604,34 @@ class Bento {
                         }
                         break;
                     }
+                    case 'listFields': {
+                        try {
+                            const response = await makeBentoRequest.call(this, 'GET', '/api/v1/fetch/fields', undefined, i);
+                            const fields = Array.isArray(response === null || response === void 0 ? void 0 : response.data)
+                                ? response.data
+                                : Array.isArray(response)
+                                    ? response
+                                    : [];
+                            responseData = {
+                                operation: 'listFields',
+                                success: true,
+                                total: fields.length,
+                                fields,
+                                apiResponse: response,
+                                message: `Retrieved ${fields.length} fields`,
+                            };
+                        }
+                        catch (error) {
+                            logSecureError.call(this, error, 'listFields', { itemIndex: i });
+                            responseData = {
+                                operation: 'listFields',
+                                success: false,
+                                error: createSecureErrorMessage(error, 'listFields'),
+                                message: 'Failed to list fields. Check your credentials and try again.',
+                            };
+                        }
+                        break;
+                    }
                     case 'listBroadcasts': {
                         const status = this.getNodeParameter('listBroadcastsStatus', i);
                         const createdAfter = this.getNodeParameter('listBroadcastsCreatedAfter', i);
@@ -1985,7 +2641,7 @@ class Bento {
                                 itemIndex: i,
                                 status,
                                 rawCreatedAfter: createdAfter,
-                                tagIds: ((_e = tagCollection === null || tagCollection === void 0 ? void 0 : tagCollection.tagId) !== null && _e !== void 0 ? _e : [])
+                                tagIds: ((_h = tagCollection === null || tagCollection === void 0 ? void 0 : tagCollection.tagId) !== null && _h !== void 0 ? _h : [])
                                     .map(tag => { var _a; return (_a = tag === null || tag === void 0 ? void 0 : tag.id) === null || _a === void 0 ? void 0 : _a.trim(); })
                                     .filter((id) => !!id),
                             };
@@ -1994,7 +2650,7 @@ class Bento {
                                 buildListBroadcastsEndpointAction,
                                 executeListBroadcastsRequestAction,
                             ]);
-                            const broadcasts = Array.isArray((_f = context.response) === null || _f === void 0 ? void 0 : _f.broadcasts)
+                            const broadcasts = Array.isArray((_j = context.response) === null || _j === void 0 ? void 0 : _j.broadcasts)
                                 ? context.response.broadcasts
                                 : Array.isArray(context.response)
                                     ? context.response
@@ -2025,6 +2681,100 @@ class Bento {
                         }
                         break;
                     }
+                    case 'listSequences': {
+                        const page = validatePositiveIntegerInput.call(this, this.getNodeParameter('listSequencesPage', i), 'Page', i);
+                        try {
+                            const response = await makeBentoRequest.call(this, 'GET', page > 1
+                                ? `/api/v1/fetch/sequences?page=${page}`
+                                : '/api/v1/fetch/sequences', undefined, i);
+                            const sequences = Array.isArray(response === null || response === void 0 ? void 0 : response.data)
+                                ? response.data
+                                : Array.isArray(response)
+                                    ? response
+                                    : [];
+                            responseData = {
+                                operation: 'listSequences',
+                                success: true,
+                                page,
+                                total: sequences.length,
+                                sequences,
+                                apiResponse: response,
+                                message: `Retrieved ${sequences.length} sequences`,
+                            };
+                        }
+                        catch (error) {
+                            logSecureError.call(this, error, 'listSequences', { itemIndex: i });
+                            responseData = {
+                                operation: 'listSequences',
+                                success: false,
+                                page,
+                                error: createSecureErrorMessage(error, 'listSequences'),
+                                message: 'Failed to list sequences. Check your credentials and try again.',
+                            };
+                        }
+                        break;
+                    }
+                    case 'listTags': {
+                        try {
+                            const response = await makeBentoRequest.call(this, 'GET', '/api/v1/fetch/tags', undefined, i);
+                            const tags = Array.isArray(response === null || response === void 0 ? void 0 : response.data)
+                                ? response.data
+                                : Array.isArray(response)
+                                    ? response
+                                    : [];
+                            responseData = {
+                                operation: 'listTags',
+                                success: true,
+                                total: tags.length,
+                                tags,
+                                apiResponse: response,
+                                message: `Retrieved ${tags.length} tags`,
+                            };
+                        }
+                        catch (error) {
+                            logSecureError.call(this, error, 'listTags', { itemIndex: i });
+                            responseData = {
+                                operation: 'listTags',
+                                success: false,
+                                error: createSecureErrorMessage(error, 'listTags'),
+                                message: 'Failed to list tags. Check your credentials and try again.',
+                            };
+                        }
+                        break;
+                    }
+                    case 'listWorkflows': {
+                        const page = validatePositiveIntegerInput.call(this, this.getNodeParameter('listWorkflowsPage', i), 'Page', i);
+                        try {
+                            const response = await makeBentoRequest.call(this, 'GET', page > 1
+                                ? `/api/v1/fetch/workflows?page=${page}`
+                                : '/api/v1/fetch/workflows', undefined, i);
+                            const workflows = Array.isArray(response === null || response === void 0 ? void 0 : response.data)
+                                ? response.data
+                                : Array.isArray(response)
+                                    ? response
+                                    : [];
+                            responseData = {
+                                operation: 'listWorkflows',
+                                success: true,
+                                page,
+                                total: workflows.length,
+                                workflows,
+                                apiResponse: response,
+                                message: `Retrieved ${workflows.length} workflows`,
+                            };
+                        }
+                        catch (error) {
+                            logSecureError.call(this, error, 'listWorkflows', { itemIndex: i });
+                            responseData = {
+                                operation: 'listWorkflows',
+                                success: false,
+                                page,
+                                error: createSecureErrorMessage(error, 'listWorkflows'),
+                                message: 'Failed to list workflows. Check your credentials and try again.',
+                            };
+                        }
+                        break;
+                    }
                     case 'reportStats': {
                         const reportId = this.getNodeParameter('reportStatsReportId', i);
                         try {
@@ -2037,7 +2787,7 @@ class Bento {
                                 buildReportStatsEndpointAction,
                                 executeReportStatsRequestAction,
                             ]);
-                            const reportData = ((_g = context.response) === null || _g === void 0 ? void 0 : _g.report) || ((_h = context.response) === null || _h === void 0 ? void 0 : _h.data) || context.response;
+                            const reportData = ((_k = context.response) === null || _k === void 0 ? void 0 : _k.report) || ((_l = context.response) === null || _l === void 0 ? void 0 : _l.data) || context.response;
                             const metricsSource = [reportData === null || reportData === void 0 ? void 0 : reportData.metrics, reportData];
                             const summaryMetrics = {};
                             const totalSends = findNumericMetric(metricsSource, ['total_sends', 'sends']);
@@ -2118,8 +2868,8 @@ class Bento {
                                 buildSendBroadcastPayloadAction,
                                 executeSendBroadcastRequestAction,
                             ]);
-                            const errors = Array.isArray((_j = context.response) === null || _j === void 0 ? void 0 : _j.errors) ? context.response.errors : undefined;
-                            const broadcasts = Array.isArray((_k = context.response) === null || _k === void 0 ? void 0 : _k.broadcasts)
+                            const errors = Array.isArray((_m = context.response) === null || _m === void 0 ? void 0 : _m.errors) ? context.response.errors : undefined;
+                            const broadcasts = Array.isArray((_o = context.response) === null || _o === void 0 ? void 0 : _o.broadcasts)
                                 ? context.response.broadcasts
                                 : undefined;
                             responseData = {
@@ -2161,18 +2911,18 @@ class Bento {
                                 buildSegmentStatsEndpointAction,
                                 executeSegmentStatsRequestAction,
                             ]);
-                            const metrics = ((_l = context.response) === null || _l === void 0 ? void 0 : _l.metrics) || ((_o = (_m = context.response) === null || _m === void 0 ? void 0 : _m.data) === null || _o === void 0 ? void 0 : _o.metrics) || context.response;
+                            const metrics = ((_p = context.response) === null || _p === void 0 ? void 0 : _p.metrics) || ((_r = (_q = context.response) === null || _q === void 0 ? void 0 : _q.data) === null || _r === void 0 ? void 0 : _r.metrics) || context.response;
                             const summaryMetrics = {};
-                            const subscriberCount = (_q = (_p = metrics === null || metrics === void 0 ? void 0 : metrics.total_subscribers) !== null && _p !== void 0 ? _p : metrics === null || metrics === void 0 ? void 0 : metrics.totalSubscribers) !== null && _q !== void 0 ? _q : metrics === null || metrics === void 0 ? void 0 : metrics.subscriber_count;
+                            const subscriberCount = (_t = (_s = metrics === null || metrics === void 0 ? void 0 : metrics.total_subscribers) !== null && _s !== void 0 ? _s : metrics === null || metrics === void 0 ? void 0 : metrics.totalSubscribers) !== null && _t !== void 0 ? _t : metrics === null || metrics === void 0 ? void 0 : metrics.subscriber_count;
                             if (typeof subscriberCount === 'number')
                                 summaryMetrics.totalSubscribers = subscriberCount;
-                            const opens = (_s = (_r = metrics === null || metrics === void 0 ? void 0 : metrics.opens) !== null && _r !== void 0 ? _r : metrics === null || metrics === void 0 ? void 0 : metrics.open_count) !== null && _s !== void 0 ? _s : metrics === null || metrics === void 0 ? void 0 : metrics.total_opens;
+                            const opens = (_v = (_u = metrics === null || metrics === void 0 ? void 0 : metrics.opens) !== null && _u !== void 0 ? _u : metrics === null || metrics === void 0 ? void 0 : metrics.open_count) !== null && _v !== void 0 ? _v : metrics === null || metrics === void 0 ? void 0 : metrics.total_opens;
                             if (typeof opens === 'number')
                                 summaryMetrics.opens = opens;
-                            const clicks = (_u = (_t = metrics === null || metrics === void 0 ? void 0 : metrics.clicks) !== null && _t !== void 0 ? _t : metrics === null || metrics === void 0 ? void 0 : metrics.click_count) !== null && _u !== void 0 ? _u : metrics === null || metrics === void 0 ? void 0 : metrics.total_clicks;
+                            const clicks = (_x = (_w = metrics === null || metrics === void 0 ? void 0 : metrics.clicks) !== null && _w !== void 0 ? _w : metrics === null || metrics === void 0 ? void 0 : metrics.click_count) !== null && _x !== void 0 ? _x : metrics === null || metrics === void 0 ? void 0 : metrics.total_clicks;
                             if (typeof clicks === 'number')
                                 summaryMetrics.clicks = clicks;
-                            const unsubscribes = (_w = (_v = metrics === null || metrics === void 0 ? void 0 : metrics.unsubscribes) !== null && _v !== void 0 ? _v : metrics === null || metrics === void 0 ? void 0 : metrics.unsubscribe_count) !== null && _w !== void 0 ? _w : metrics === null || metrics === void 0 ? void 0 : metrics.total_unsubscribes;
+                            const unsubscribes = (_z = (_y = metrics === null || metrics === void 0 ? void 0 : metrics.unsubscribes) !== null && _y !== void 0 ? _y : metrics === null || metrics === void 0 ? void 0 : metrics.unsubscribe_count) !== null && _z !== void 0 ? _z : metrics === null || metrics === void 0 ? void 0 : metrics.total_unsubscribes;
                             if (typeof unsubscribes === 'number')
                                 summaryMetrics.unsubscribes = unsubscribes;
                             const summary = Object.keys(summaryMetrics).length > 0
@@ -2211,15 +2961,15 @@ class Bento {
                                 buildSiteStatsEndpointAction,
                                 executeSiteStatsRequestAction,
                             ]);
-                            const totals = ((_x = context.response) === null || _x === void 0 ? void 0 : _x.totals) || ((_z = (_y = context.response) === null || _y === void 0 ? void 0 : _y.data) === null || _z === void 0 ? void 0 : _z.totals) || context.response;
+                            const totals = ((_0 = context.response) === null || _0 === void 0 ? void 0 : _0.totals) || ((_2 = (_1 = context.response) === null || _1 === void 0 ? void 0 : _1.data) === null || _2 === void 0 ? void 0 : _2.totals) || context.response;
                             const summaryTotals = {};
-                            const totalSubscribers = (_0 = totals === null || totals === void 0 ? void 0 : totals.total_subscribers) !== null && _0 !== void 0 ? _0 : totals === null || totals === void 0 ? void 0 : totals.totalSubscribers;
+                            const totalSubscribers = (_3 = totals === null || totals === void 0 ? void 0 : totals.total_subscribers) !== null && _3 !== void 0 ? _3 : totals === null || totals === void 0 ? void 0 : totals.totalSubscribers;
                             if (typeof totalSubscribers === 'number')
                                 summaryTotals.totalSubscribers = totalSubscribers;
-                            const activeSubscribers = (_1 = totals === null || totals === void 0 ? void 0 : totals.active_subscribers) !== null && _1 !== void 0 ? _1 : totals === null || totals === void 0 ? void 0 : totals.activeSubscribers;
+                            const activeSubscribers = (_4 = totals === null || totals === void 0 ? void 0 : totals.active_subscribers) !== null && _4 !== void 0 ? _4 : totals === null || totals === void 0 ? void 0 : totals.activeSubscribers;
                             if (typeof activeSubscribers === 'number')
                                 summaryTotals.activeSubscribers = activeSubscribers;
-                            const inactiveSubscribers = (_2 = totals === null || totals === void 0 ? void 0 : totals.inactive_subscribers) !== null && _2 !== void 0 ? _2 : totals === null || totals === void 0 ? void 0 : totals.inactiveSubscribers;
+                            const inactiveSubscribers = (_5 = totals === null || totals === void 0 ? void 0 : totals.inactive_subscribers) !== null && _5 !== void 0 ? _5 : totals === null || totals === void 0 ? void 0 : totals.inactiveSubscribers;
                             if (typeof inactiveSubscribers === 'number')
                                 summaryTotals.inactiveSubscribers = inactiveSubscribers;
                             const summary = Object.keys(summaryTotals).length > 0
@@ -2276,49 +3026,6 @@ async function runPipeline(executor, initialContext, actions) {
     for (const action of actions) {
         context = await action.call(executor, context);
     }
-    return context;
-}
-function validateBlacklistInputAction(context) {
-    const { domain, ip, itemIndex } = context;
-    const trimmedDomain = domain === null || domain === void 0 ? void 0 : domain.trim();
-    if (!trimmedDomain) {
-        throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'Domain is required for blacklist checks', {
-            itemIndex,
-        });
-    }
-    if (trimmedDomain.length > 253) {
-        throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'Domain exceeds maximum length of 253 characters', {
-            itemIndex,
-        });
-    }
-    const domainPattern = /^(?!-)(?:[a-zA-Z0-9-]{0,62}[a-zA-Z0-9]\.)+[A-Za-z]{2,}$/;
-    if (!domainPattern.test(trimmedDomain)) {
-        throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'Domain format is invalid', {
-            itemIndex,
-        });
-    }
-    if (ip) {
-        validateInputLength.call(this, ip, INPUT_LIMITS.IP_ADDRESS, 'IP Address', itemIndex);
-    }
-    context.domain = trimmedDomain.toLowerCase();
-    return context;
-}
-function buildBlacklistEndpointAction(context) {
-    const params = new URLSearchParams();
-    params.append('domain', context.domain);
-    if (context.ip) {
-        params.append('ip', context.ip);
-    }
-    context.endpoint = `/api/v1/experimental/blacklist?${params.toString()}`;
-    return context;
-}
-async function executeBlacklistRequestAction(context) {
-    if (!context.endpoint) {
-        throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'Blacklist endpoint not generated', {
-            itemIndex: context.itemIndex,
-        });
-    }
-    context.response = await makeBentoRequest.call(this, 'GET', context.endpoint, undefined, context.itemIndex);
     return context;
 }
 function validateContentModerationAction(context) {
@@ -2782,7 +3489,7 @@ async function makeBentoRequest(method, endpoint, body, itemIndex = 0) {
                     json: true,
                     timeout: REQUEST_LIMITS.DEFAULT_TIMEOUT,
                 };
-                if (body && (method === 'POST' || method === 'PUT')) {
+                if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
                     options.body = body;
                 }
                 const response = await this.helpers.httpRequest(options);

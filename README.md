@@ -32,6 +32,7 @@ Get started with our [📚 integration guides](https://docs.bentonow.com), or [�
 - **Event Tracking**: Track custom events and user behavior for advanced segmentation and automation
 - **Transactional Emails**: Send personalized transactional emails with HTML/text content and template variables
 - **Subscriber Commands**: Execute powerful commands like adding/removing tags, managing fields, and subscription status
+- **Audience Schema & Content**: Create fields and tags, inspect sequences and workflows, and manage Bento email templates
 - **Email Validation**: Validate email addresses for spam/throwaway detection using Bento's validation service
 - **Utility Tools**: Run blacklist checks and content moderation via Bento's experimental services
 - **Analytics Insights**: Retrieve site-wide and segment-level performance metrics without leaving n8n
@@ -134,6 +135,180 @@ Retrieve detailed information about an existing subscriber by email.
 - Look up subscriber information before sending personalized content
 - Verify subscriber existence in conditional workflows
 - Retrieve custom field data for personalization
+
+### List Fields
+
+Retrieve the Bento custom fields configured for the current site.
+
+**Required Parameters:**
+
+- None
+
+**Returns:**
+
+- All Bento field definitions, including key, name, and creation metadata
+
+**Example Use Cases:**
+
+- Audit the custom field schema before syncing profile data
+- Populate internal documentation or dropdowns with Bento field definitions
+- Check whether a field exists before trying to write to it
+
+### Create Field
+
+Create a new Bento custom field definition.
+
+**Required Parameters:**
+
+- **Field Key**: Unique Bento key to create
+
+**Returns:**
+
+- Bento's field creation response, including the current field list when available
+
+**Example Use Cases:**
+
+- Provision new profile fields before importing subscriber data
+- Standardize field creation from infrastructure workflows
+- Expand your Bento schema without leaving n8n
+
+### List Tags
+
+Retrieve the Bento tags configured for the current site.
+
+**Required Parameters:**
+
+- None
+
+**Returns:**
+
+- All Bento tags available for segmentation and automation
+
+**Example Use Cases:**
+
+- Audit tagging conventions before launching campaigns
+- Populate tag pickers in internal workflow tooling
+- Check whether a tag exists before applying it to subscribers
+
+### Create Tag
+
+Create a new Bento tag.
+
+**Required Parameters:**
+
+- **Tag Name**: Name of the tag to create
+
+**Returns:**
+
+- Bento's tag creation response, including the current tag list when available
+
+**Example Use Cases:**
+
+- Provision tags during onboarding of new automation flows
+- Standardize segmentation setup across environments
+- Create campaign-specific tags on demand from n8n
+
+### List Sequences
+
+Retrieve Bento sequences, including their embedded email templates.
+
+**Optional Parameters:**
+
+- **Page**: Page number to fetch when working through large sequence lists
+
+**Returns:**
+
+- Sequence records with nested email template metadata
+
+**Example Use Cases:**
+
+- Inspect available nurture sequences before appending emails
+- Build reporting or approval workflows around sequence inventory
+- Sync sequence metadata into internal tooling
+
+### Create Sequence Email
+
+Add a new email template to an existing Bento sequence.
+
+**Required Parameters:**
+
+- **Sequence ID**: Sequence that should receive the new email
+- **Subject**: Subject line for the sequence email
+- **HTML**: HTML body of the email
+
+**Optional Parameters:**
+
+- **Inbox Snippet**: Preheader text shown in supported inboxes
+- **Delay Interval / Count**: Delay before Bento sends the email inside the sequence
+- **Editor Choice**: Optional Bento editor mode
+- **To / CC / BCC**: Optional email header overrides supported by Bento
+
+**Returns:**
+
+- The created Bento email template payload
+
+**Example Use Cases:**
+
+- Append onboarding or upsell emails to an existing sequence
+- Generate sequence content programmatically from CMS or AI outputs
+- Keep Bento sequence maintenance inside n8n deployment workflows
+
+### List Workflows
+
+Retrieve Bento workflows, including their embedded email templates.
+
+**Optional Parameters:**
+
+- **Page**: Page number to fetch when working through large workflow lists
+
+**Returns:**
+
+- Workflow records with status and embedded email template metadata
+
+**Example Use Cases:**
+
+- Review live versus draft workflows before publishing related changes
+- Feed workflow metadata into ops dashboards
+- Inventory Bento automation assets without leaving n8n
+
+### Get Email Template
+
+Retrieve a Bento email template by ID.
+
+**Required Parameters:**
+
+- **Template ID**: Numeric Bento template identifier
+
+**Returns:**
+
+- Full email template content, including subject, HTML, and stats metadata
+
+**Example Use Cases:**
+
+- Inspect a template before updating it
+- Pull Bento email content into approval or review workflows
+- Sync template metadata into internal systems
+
+### Update Email Template
+
+Update a Bento email template's subject and/or HTML.
+
+**Required Parameters:**
+
+- **Template ID**: Numeric Bento template identifier
+- Provide at least one of:
+  - **Subject**
+  - **HTML**
+
+**Returns:**
+
+- The updated Bento email template payload
+
+**Example Use Cases:**
+
+- Roll out copy changes across existing templates
+- Update HTML from a centralized content workflow
+- Patch production templates from automated release jobs
 
 ### Update Subscriber
 
@@ -256,16 +431,17 @@ Validate email addresses for spam/throwaway detection using Bento's validation s
 
 ### Blacklist Check
 
-Evaluate whether an email address appears on Bento's blacklist service.
+Query Bento’s experimental blacklist service for a domain and optional IP address.
 
 **Required Parameters:**
 
-- **Email**: The email address to evaluate
+- Provide at least one of the following:
+  - **Domain** (e.g., `test.com`)
+  - **IP Address** (e.g., `1.1.1.1`)
 
 **Optional Parameters:**
 
-- **First Name / Last Name**: Supplementary profile data to improve match confidence
-- **IP Address**: Associated IP address for additional scoring context
+- Supply both Domain and IP to refine the blacklist lookup
 
 **Returns:**
 
@@ -273,9 +449,9 @@ Evaluate whether an email address appears on Bento's blacklist service.
 
 **Example Use Cases:**
 
-- Prevent sending to high-risk or known abusive addresses
-- Screen manual imports before adding to automations
-- Review lead sources for potential fraud signals
+- Screen incoming leads or signup forms by their sending domain
+- Enforce allow/deny rules in automations before triggering downstream actions
+- Investigate suspicious traffic by cross-referencing domain activity with IP reputation
 
 ### Content Moderation
 
@@ -305,11 +481,12 @@ Predict the likely gender associated with a subscriber using Bento's experimenta
 
 **Required Parameters:**
 
-- At least one of **Email**, **First Name**, or **Last Name**
+- Provide at least one of **First Name** or **Last Name** (their combination is sent as the required `name` field)
 
 **Optional Parameters:**
 
-- Provide combinations of email and names to increase prediction accuracy
+- **Email** (improves accuracy when combined with the name)
+- Supplying both first and last names produces the most complete `name` payload
 
 **Returns:**
 
@@ -345,16 +522,11 @@ Retrieve geolocation metadata for a subscriber's IP address.
 
 ### Site Metrics
 
-Pull site-wide performance metrics across a configurable date range.
+Fetch Bento’s top-level site metrics with a single API call.
 
 **Required Parameters:**
 
-- **Date Range**: Choose from Last 7 Days, Last 30 Days, or a custom window
-
-**Optional Parameters:**
-
-- **Start/End Date**: Only when using the Custom range
-- **Include Inactive Subscribers**: Toggle to include unsubscribed or inactive contacts
+- None – your Bento credentials (including `site_uuid`) scope the request
 
 **Returns:**
 
@@ -362,9 +534,9 @@ Pull site-wide performance metrics across a configurable date range.
 
 **Example Use Cases:**
 
-- Monitor high-level list growth week over week
-- Compare subscriber activity across monthly windows
-- Share snapshot summaries with stakeholders
+- Monitor list growth from dashboards or health checks
+- Provide executives with a quick snapshot of site-wide performance
+- Automate daily or weekly rollups without manual filtering
 
 ### Segment Metrics
 
@@ -373,11 +545,6 @@ Measure engagement for a specific Bento segment.
 **Required Parameters:**
 
 - **Segment ID**: Identifier of the segment to analyze
-- **Date Range**: Choose a preset or custom window
-
-**Optional Parameters:**
-
-- **Start/End Date**: Only required when using a custom range
 
 **Returns:**
 
@@ -391,13 +558,11 @@ Measure engagement for a specific Bento segment.
 
 ### Report Metrics
 
-Collect high-level reports for broadcasts, automations, or revenue.
+Collect high-level report metrics using Bento's unified report endpoint.
 
 **Required Parameters:**
 
-- **Report Type**: Select Broadcast, Automation, or Revenue
-- **Broadcast/Automation ID**: Required when the corresponding type is selected
-- **Date Range**: Choose from presets or supply a custom window
+- **Report ID**: The `report_id` returned by Bento when generating a report
 
 **Returns:**
 
@@ -405,9 +570,9 @@ Collect high-level reports for broadcasts, automations, or revenue.
 
 **Example Use Cases:**
 
-- Summarize broadcast performance for stakeholders
-- Track automation effectiveness over specific windows
-- Monitor revenue generated from email activity
+- Summarize the results of a generated report for stakeholders
+- Refresh dashboards that rely on Bento’s report API
+- Monitor revenue and engagement contained in saved Bento reports
 
 ### List Broadcasts
 
@@ -431,32 +596,36 @@ Retrieve Bento broadcasts with optional filtering.
 
 ### Send Broadcast
 
-Queue a draft broadcast for immediate or scheduled delivery.
+Submit a broadcast batch to Bento’s `/batch/broadcasts` endpoint.
 
 > [!WARNING]
 > This action requires enabling **Confirm Send** to avoid accidental sends. Failing to confirm will block execution.
 
 **Required Parameters:**
 
-- **Broadcast ID**: Identifier of the draft broadcast
-- **Audience**: All subscribers, a segment, or specific tags
-- **Send Timing**: Immediate or scheduled
+- **Campaign Name**: Identifier for the broadcast
+- **Subject**: Email subject line
+- **Content**: Campaign body (plain text or HTML)
+- **Content Type**: Chooses how Bento renders the content
+- **From Email/Name**: Sender identity displayed to recipients
+- **Confirm Send**: Must be enabled to submit the batch
 
 **Optional Parameters:**
 
-- **Subject Override**: Replace the stored subject line
-- **Segment/Tag IDs**: Provide when targeting a subset
-- **Scheduled Send Time**: Required when using scheduled timing
+- **Approved**: Flag the campaign as approved for sending
+- **Inclusive/Exclusive Tags**: Comma-separated tag filters
+- **Segment ID**: Restrict delivery to a specific segment
+- **Batch Size Per Hour**: Limit hourly send volume (defaults to Bento’s setting)
 
 **Returns:**
 
-- API response payload including any partial failure errors surfaced by Bento
+- Bento’s API response, including any broadcast objects returned or validation errors
 
 **Example Use Cases:**
 
-- Schedule a broadcast directly from an automation workflow
-- Target broadcasts to high-value segments or tagged cohorts
-- Trigger emergency messages while enforcing a confirmation gate
+- Launch ad-hoc campaigns from n8n using Bento’s batch API
+- Enforce hour-based throttling for large broadcasts
+- Target subsets of the audience with inclusive/exclusive tag filters while keeping workflows code-free
 
 ## Things to Know
 
@@ -486,6 +655,15 @@ Queue a draft broadcast for immediate or scheduled delivery.
 The node uses the following Bento API endpoints:
 
 - `POST /api/v1/batch/events` - For creating subscribers and tracking events
+- `GET /api/v1/fetch/fields` - For listing Bento field definitions
+- `POST /api/v1/fetch/fields` - For creating Bento field definitions
+- `GET /api/v1/fetch/tags` - For listing Bento tags
+- `POST /api/v1/fetch/tags` - For creating Bento tags
+- `GET /api/v1/fetch/sequences` - For listing Bento sequences
+- `POST /api/v1/fetch/sequences/:sequenceId/emails/templates` - For creating sequence emails
+- `GET /api/v1/fetch/workflows` - For listing Bento workflows
+- `GET /api/v1/fetch/emails/templates/:id` - For retrieving Bento email templates
+- `PATCH /api/v1/fetch/emails/templates/:id` - For updating Bento email templates
 - `GET /api/v1/fetch/subscribers` - For retrieving subscriber information
 - `POST /api/v1/batch/subscribers` - For updating subscriber information
 - `POST /api/v1/batch/emails` - For sending transactional emails
